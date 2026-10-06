@@ -39,6 +39,26 @@ class SearchViewModel
 
         /** The last submitted/searched query; blank means the idle state. */
         val searchedQuery = MutableStateFlow("")
+        val playlists =
+            repo.localPlaylists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        fun addToPlaylist(
+            playlistId: Long,
+            song: Song,
+        ) {
+            viewModelScope.launch { repo.addToPlaylist(playlistId, song) }
+        }
+
+        fun createPlaylistAndAdd(
+            name: String,
+            song: Song,
+        ) {
+            viewModelScope.launch {
+                val playlistId = repo.createPlaylist(name)
+                repo.addToPlaylist(playlistId, song)
+            }
+        }
+
         val recent = repo.recentSearches.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         private val pendingQuery = MutableStateFlow("")

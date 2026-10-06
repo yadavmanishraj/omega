@@ -26,6 +26,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,8 +39,10 @@ import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerList
+import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import java.util.Calendar
@@ -73,7 +78,9 @@ fun HomeScreen(
     val history by vm.history.collectAsState()
     val downloads by vm.downloads.collectAsState()
     val favorites by vm.favorites.collectAsState()
+    val localPlaylists by vm.playlists.collectAsState()
     val online by vm.online.collectAsState()
+    var playlistTarget by remember { mutableStateOf<Song?>(null) }
 
     val refreshing = trending is UiState.Loading
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }) {
@@ -171,7 +178,13 @@ fun HomeScreen(
                 if (favorites.isNotEmpty()) {
                     item { SectionHeader("Your favorites") }
                     items(favorites.take(10)) { song ->
-                        SongRow(song, { onPlayQueue(favorites, favorites.indexOf(song)) })
+                        SongRow(
+                            song,
+                            { onPlayQueue(favorites, favorites.indexOf(song)) },
+                            trailing = {
+                                SongOverflowMenuButton(song) { playlistTarget = song }
+                            },
+                        )
                     }
                 }
                 if (downloads.isEmpty() && favorites.isEmpty() && history.isEmpty()) {
@@ -212,7 +225,13 @@ fun HomeScreen(
                             if (s.data.isNotEmpty()) {
                                 item { SectionHeader("Trending songs") }
                                 items(s.data.take(10)) { song ->
-                                    SongRow(song, { onPlayQueue(s.data, s.data.indexOf(song)) })
+                                    SongRow(
+                                        song,
+                                        { onPlayQueue(s.data, s.data.indexOf(song)) },
+                                        trailing = {
+                                            SongOverflowMenuButton(song) { playlistTarget = song }
+                                        },
+                                    )
                                 }
                             }
                         }
@@ -287,5 +306,21 @@ fun HomeScreen(
             }
             item { Spacer(Modifier.height(OmegaSpacing.xl)) }
         }
+    }
+
+    // No snackbar host on Home: the picker closing is the confirmation.
+    playlistTarget?.let { song ->
+        PlaylistPickerDialog(
+            playlists = localPlaylists,
+            onPick = { playlist ->
+                vm.addToPlaylist(playlist.id, song)
+                playlistTarget = null
+            },
+            onCreatePlaylist = { name ->
+                vm.createPlaylistAndAdd(name, song)
+                playlistTarget = null
+            },
+            onDismiss = { playlistTarget = null },
+        )
     }
 }

@@ -341,11 +341,25 @@ class MusicRepository
 
         suspend fun deletePlaylist(id: Long) = dao.deletePlaylist(id)
 
+        /**
+         * Appends a song to a local playlist (position = current size,
+         * so playlist order is insertion order). Re-adding a song that
+         * is already in the playlist replaces its snapshot in place.
+         */
         suspend fun addToPlaylist(
             pid: Long,
             s: Song,
-            pos: Int = 0,
-        ) = dao.addToPlaylist(LocalPlaylistSongEntity(pid, s.id, s.name, s.artist, s.imageUrl, s.streamUrl, pos))
+        ) = dao.addToPlaylist(
+            LocalPlaylistSongEntity(
+                pid,
+                s.id,
+                s.name,
+                s.artist,
+                s.imageUrl,
+                s.streamUrl,
+                dao.playlistSongCount(pid),
+            ),
+        )
 
         suspend fun registerDownload(
             s: Song,
