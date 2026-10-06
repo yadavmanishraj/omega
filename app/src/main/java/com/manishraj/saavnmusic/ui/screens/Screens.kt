@@ -58,6 +58,7 @@ import com.manishraj.saavnmusic.ui.viewmodel.*
     }
 }
 
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
@@ -76,20 +77,14 @@ fun SearchScreen(
     val tab by vm.tab.collectAsState()
     Column(Modifier.fillMaxSize()) {
         SearchBar(
+            query = text,
+            onQueryChange = { text = it },
+            onSearch = { vm.search(text) },
+            active = false,
+            onActiveChange = {},
+            placeholder = { Text("Songs, albums, artists…") },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
             modifier = Modifier.fillMaxWidth().padding(12.dp),
-            inputField = {
-                SearchBarInputField(
-                    query = text,
-                    onQueryChange = { text = it },
-                    onSearch = { vm.search(text) },
-                    expanded = false,
-                    onExpandedChange = {},
-                    placeholder = { Text("Songs, albums, artists…") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                )
-            },
-            expanded = false,
-            onExpandedChange = {},
         ) {}
         if (recent.isNotEmpty() &&
             songs is UiState.Success &&

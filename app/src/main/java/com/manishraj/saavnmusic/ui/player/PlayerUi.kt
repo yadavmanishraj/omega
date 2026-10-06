@@ -45,6 +45,7 @@ fun MiniPlayer(
     }
 }
 
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FullPlayer(
@@ -72,7 +73,7 @@ fun FullPlayer(
             IconButton(onClick = {
                 showQueue =
                     true
-            }) { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) }
+            }) { Icon(Icons.Filled.QueueMusic, null) }
         }
         Artwork(cur.imageUrl, 300, 20)
         Spacer(Modifier.height(20.dp))
