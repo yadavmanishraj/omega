@@ -40,6 +40,7 @@ import com.manishraj.saavnmusic.feature.detail.AlbumScreen
 import com.manishraj.saavnmusic.feature.detail.ArtistScreen
 import com.manishraj.saavnmusic.feature.detail.PlaylistScreen
 import com.manishraj.saavnmusic.feature.home.HomeScreen
+import com.manishraj.saavnmusic.feature.library.LIBRARY_TAB_DOWNLOADS
 import com.manishraj.saavnmusic.feature.library.LibraryScreen
 import com.manishraj.saavnmusic.feature.player.FullPlayer
 import com.manishraj.saavnmusic.feature.player.MiniPlayer
@@ -83,7 +84,9 @@ fun AppRoot() {
     val playerVm: PlayerViewModel = hiltViewModel()
     var showPlayer by remember { mutableStateOf(false) }
     val back by nav.currentBackStackEntryAsState()
-    val route = back?.destination?.route
+    // Destination routes are patterns (e.g. "library?tab={tab}"); the
+    // bottom bar compares against the plain destination name.
+    val route = back?.destination?.route?.substringBefore('?')
     // Features never depend on :feature:player; :app injects playback as a
     // lambda, the same pattern used for cross-feature navigation.
     val playQueue: (List<Song>, Int) -> Unit = { songs, index -> playerVm.play(songs, index) }
@@ -132,7 +135,7 @@ fun AppRoot() {
                             onArtist = { nav.navigate("artist/$it") },
                             onPlayQueue = playQueue,
                             onOpenDownloads = {
-                                nav.navigate("library") {
+                                nav.navigate("library?tab=$LIBRARY_TAB_DOWNLOADS") {
                                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
@@ -155,7 +158,16 @@ fun AppRoot() {
                             },
                         )
                     }
-                    composable("library") {
+                    composable(
+                        "library?tab={tab}",
+                        arguments =
+                            listOf(
+                                navArgument("tab") {
+                                    type = NavType.IntType
+                                    defaultValue = -1
+                                },
+                            ),
+                    ) { entry ->
                         LibraryScreen(
                             onPlayQueue = playQueue,
                             onOpenSearch = {
@@ -165,6 +177,7 @@ fun AppRoot() {
                                     restoreState = true
                                 }
                             },
+                            initialTab = entry.arguments?.getInt("tab")?.takeIf { it >= 0 } ?: 0,
                         )
                     }
                     composable("settings") { SettingsScreen() }
