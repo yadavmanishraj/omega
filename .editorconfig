@@ -1,0 +1,15 @@
+root = true
+
+[*.{kt,kts}]
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 140
+
+# Jetpack Compose code in this project uses the standard Compose
+# conventions that conflict with two stock ktlint rules:
+#  - @Composable functions are PascalCase by design (function-naming)
+#  - a small set of framework namespaces (Compose layout/material icons,
+#    Media3 common) are imported as wildcards by design (no-wildcard-imports)
+ktlint_standard_function-naming = disabled
+ktlint_standard_no-wildcard-imports = disabled

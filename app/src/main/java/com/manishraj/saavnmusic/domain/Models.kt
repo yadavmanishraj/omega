@@ -11,7 +11,7 @@ data class Song(
     val downloadUrls: List<Pair<String, String>> = emptyList(),
     val hasLyrics: Boolean = false,
     val year: String? = null,
-    val language: String = ""
+    val language: String = "",
 )
 
 data class Album(
@@ -22,7 +22,7 @@ data class Album(
     val year: String?,
     val songCount: Int?,
     val songs: List<Song> = emptyList(),
-    val description: String? = null
+    val description: String? = null,
 )
 
 data class Playlist(
@@ -31,7 +31,7 @@ data class Playlist(
     val imageUrl: String?,
     val songCount: Int?,
     val songs: List<Song> = emptyList(),
-    val description: String? = null
+    val description: String? = null,
 )
 
 data class Artist(
@@ -41,15 +41,19 @@ data class Artist(
     val followers: Long? = null,
     val bio: String? = null,
     val topSongs: List<Song> = emptyList(),
-    val topAlbums: List<Album> = emptyList()
+    val topAlbums: List<Album> = emptyList(),
 )
 
 sealed interface UiState<out T> {
     data object Loading : UiState<Nothing>
 
-    data class Success<T>(val data: T) : UiState<T>
+    data class Success<T>(
+        val data: T,
+    ) : UiState<T>
 
-    data class Error(val message: String) : UiState<Nothing>
+    data class Error(
+        val message: String,
+    ) : UiState<Nothing>
 }
 
 fun formatDuration(sec: Long?): String {
@@ -58,10 +62,13 @@ fun formatDuration(sec: Long?): String {
 }
 
 /** jiosaavn-dl naming: sanitized "Artist - Title.m4a", albums as "Artist - Album [Year]/NN. Title.m4a" (see STUDY.md). */
-fun sanitizeFileName(s: String): String =
-    s.replace(Regex("[\\/:*?\"<>|]"), "").trim().ifBlank { "track" }
+fun sanitizeFileName(s: String): String = s.replace(Regex("[\\/:*?\"<>|]"), "").trim().ifBlank { "track" }
 
-fun downloadFileName(song: Song, position: Int? = null, total: Int? = null): String =
+fun downloadFileName(
+    song: Song,
+    position: Int? = null,
+    total: Int? = null,
+): String =
     if (position != null) {
         "%02d. %s.m4a".format(position, sanitizeFileName(song.name))
     } else {
