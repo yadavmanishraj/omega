@@ -44,9 +44,9 @@ jobs:
         run: yes | sdkmanager --licenses > /dev/null || true
 
       # NOTE: use `gradle` directly, NOT ./gradlew.
-      # The gradle-wrapper.jar binary cannot be pushed through the GitHub
-      # file-push connector used to publish this repository, so CI installs
-      # the pinned Gradle 8.9 distribution instead of relying on the wrapper.
+      # CI installs the pinned Gradle 8.9 distribution instead of relying
+      # on the wrapper. Root-level tasks (lintDebug / testDebugUnitTest /
+      # assembleDebug) fan out across all 17 modules automatically.
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -72,8 +72,10 @@ jobs:
         with:
           name: unit-test-reports
           path: |
-            app/build/reports/tests/testDebugUnitTest/
-            app/build/test-results/testDebugUnitTest/
+            */build/reports/tests/testDebugUnitTest/
+            */build/test-results/testDebugUnitTest/
+            */*/build/reports/tests/testDebugUnitTest/
+            */*/build/test-results/testDebugUnitTest/
           if-no-files-found: warn
 
       - name: Upload lint reports
@@ -82,6 +84,6 @@ jobs:
         with:
           name: lint-reports
           path: |
-            app/build/reports/lint-results-debug.html
-            app/build/reports/lint-results-debug.xml
+            */build/reports/lint-results-debug.*
+            */*/build/reports/lint-results-debug.*
           if-no-files-found: warn

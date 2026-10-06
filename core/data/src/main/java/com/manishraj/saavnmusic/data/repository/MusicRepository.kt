@@ -249,23 +249,24 @@ class MusicRepository
         ): List<Song> {
             return try {
                 val ep = endpoint()
-                var stationId = stationIds[songId]
-                if (stationId == null) {
-                    val created =
-                        client.callObject(
-                            ep,
-                            "webradio.createEntityStation",
-                            mapOf(
-                                "entity_id" to "[\"$songId\"]",
-                                "entity_type" to "queue",
-                            ),
-                            ctx = JioSaavnClient.ANDROID_CTX,
-                        )
-                    stationId =
-                        json.decodeFromJsonElement<RawStationCreatedDto>(created).stationid
-                            ?: return emptyList()
-                    stationIds[songId] = stationId
-                }
+                val stationId =
+                    stationIds[songId] ?: run {
+                        val created =
+                            client.callObject(
+                                ep,
+                                "webradio.createEntityStation",
+                                mapOf(
+                                    "entity_id" to "[\"$songId\"]",
+                                    "entity_type" to "queue",
+                                ),
+                                ctx = JioSaavnClient.ANDROID_CTX,
+                            )
+                        val createdId =
+                            json.decodeFromJsonElement<RawStationCreatedDto>(created).stationid
+                                ?: return emptyList()
+                        stationIds[songId] = createdId
+                        createdId
+                    }
                 val obj =
                     client.callObject(
                         ep,
@@ -282,8 +283,7 @@ class MusicRepository
                         runCatching {
                             json.decodeFromJsonElement<RawStationEntryDto>(value).song?.toDomain()
                         }.getOrNull()
-                    }
-                    .take(limit)
+                    }.take(limit)
             } catch (e: Exception) {
                 emptyList()
             }
@@ -302,7 +302,7 @@ class MusicRepository
         val recentSearches: Flow<List<String>> =
             dao.recentSearches().map { list -> list.map { it.query } }
         val localPlaylists: Flow<List<LocalPlaylist>> =
-            dao.playlists().map { list -> list.map { LocalPlaylist(it.id, it.name) } }
+            dao.playlists().map { list -> list.map { LocalPlaylist(it.id, it.name, it.songCount) } }
 
         fun isFavorite(id: String) = dao.isFavorite(id)
 
@@ -356,7 +356,18 @@ class MusicRepository
         /** Re-registers a download row (used by the Library Undo action after a delete). */
         suspend fun registerDownload(info: DownloadInfo) =
             dao.upsertDownload(
-                DownloadEntity(info.songId, info.name, info.artist, info.album, info.imageUrl, info.filePath, info.quality, info.sizeBytes, info.status, info.progress),
+                DownloadEntity(
+                    info.songId,
+                    info.name,
+                    info.artist,
+                    info.album,
+                    info.imageUrl,
+                    info.filePath,
+                    info.quality,
+                    info.sizeBytes,
+                    info.status,
+                    info.progress,
+                ),
             )
 
         suspend fun deleteDownload(id: String) {

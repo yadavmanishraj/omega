@@ -33,6 +33,7 @@ import com.manishraj.saavnmusic.ui.components.MediaCard
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.SongRow
+import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 
 @Composable
 fun AlbumScreen(
@@ -106,7 +107,7 @@ fun SongListHeader(
 ) {
     GradientHeader(image) {
         Column(Modifier.padding(16.dp)) {
-            Artwork(image, 180, 16)
+            Artwork(image, 180, OmegaRadius.xl)
             Spacer(Modifier.height(12.dp))
             Text(title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium)

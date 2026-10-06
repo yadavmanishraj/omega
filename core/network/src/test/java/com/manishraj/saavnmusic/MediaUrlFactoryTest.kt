@@ -63,7 +63,10 @@ class MediaUrlFactoryTest {
             ),
             ladder,
         )
-        assertEquals("https://c.saavncdn.com/artists/x-500x500.jpg", MediaUrlFactory.bestImage("http://c.saavncdn.com/artists/x-150x150.jpg"))
+        assertEquals(
+            "https://c.saavncdn.com/artists/x-500x500.jpg",
+            MediaUrlFactory.bestImage("http://c.saavncdn.com/artists/x-150x150.jpg"),
+        )
         assertNull(MediaUrlFactory.bestImage(null))
     }
 }

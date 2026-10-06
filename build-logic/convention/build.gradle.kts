@@ -30,35 +30,59 @@ dependencies {
 gradlePlugin {
     plugins {
         register("androidLibrary") {
-            id = libs.plugins.omega.android.library.get().pluginId
+            id =
+                libs.plugins.omega.android.library
+                    .get()
+                    .pluginId
             implementationClass = "AndroidLibraryConventionPlugin"
         }
         register("androidLibraryCompose") {
-            id = libs.plugins.omega.android.library.compose.get().pluginId
+            id =
+                libs.plugins.omega.android.library.compose
+                    .get()
+                    .pluginId
             implementationClass = "AndroidLibraryComposeConventionPlugin"
         }
         register("androidApplication") {
-            id = libs.plugins.omega.android.application.get().pluginId
+            id =
+                libs.plugins.omega.android.application
+                    .get()
+                    .pluginId
             implementationClass = "AndroidApplicationConventionPlugin"
         }
         register("androidApplicationCompose") {
-            id = libs.plugins.omega.android.application.compose.get().pluginId
+            id =
+                libs.plugins.omega.android.application.compose
+                    .get()
+                    .pluginId
             implementationClass = "AndroidApplicationComposeConventionPlugin"
         }
         register("androidFeature") {
-            id = libs.plugins.omega.android.feature.get().pluginId
+            id =
+                libs.plugins.omega.android.feature
+                    .get()
+                    .pluginId
             implementationClass = "AndroidFeatureConventionPlugin"
         }
         register("hilt") {
-            id = libs.plugins.omega.hilt.get().pluginId
+            id =
+                libs.plugins.omega.hilt
+                    .get()
+                    .pluginId
             implementationClass = "HiltConventionPlugin"
         }
         register("jvmLibrary") {
-            id = libs.plugins.omega.jvm.library.get().pluginId
+            id =
+                libs.plugins.omega.jvm.library
+                    .get()
+                    .pluginId
             implementationClass = "JvmLibraryConventionPlugin"
         }
         register("androidRoom") {
-            id = libs.plugins.omega.android.room.get().pluginId
+            id =
+                libs.plugins.omega.android.room
+                    .get()
+                    .pluginId
             implementationClass = "AndroidRoomConventionPlugin"
         }
     }

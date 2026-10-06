@@ -35,7 +35,11 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
                 // resources inside ":core:network" must be prefixed with
                 // "core_network_" (Now in Android pattern).
                 resourcePrefix =
-                    path.split("""\W""".toRegex()).drop(1).distinct().joinToString(separator = "_")
+                    path
+                        .split("""\W""".toRegex())
+                        .drop(1)
+                        .distinct()
+                        .joinToString(separator = "_")
                         .lowercase() + "_"
             }
 

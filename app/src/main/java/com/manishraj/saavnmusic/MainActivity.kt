@@ -65,7 +65,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settingsVm: SettingsViewModel = hiltViewModel()
             val s by settingsVm.state.collectAsState()
-            SaavnTheme(dark = s.darkTheme, dynamic = s.dynamicColor) { AppRoot() }
+            val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val dark =
+                when (s.themeMode) {
+                    "LIGHT" -> false
+                    "DARK" -> true
+                    else -> systemDark
+                }
+            SaavnTheme(dark = dark, dynamic = s.dynamicColor) { AppRoot() }
         }
     }
 }
@@ -124,6 +131,13 @@ fun AppRoot() {
                             onPlaylist = { nav.navigate("playlist/$it") },
                             onArtist = { nav.navigate("artist/$it") },
                             onPlayQueue = playQueue,
+                            onOpenDownloads = {
+                                nav.navigate("library") {
+                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
                         )
                     }
                     composable("search") {
@@ -132,9 +146,27 @@ fun AppRoot() {
                             onPlaylist = { nav.navigate("playlist/$it") },
                             onArtist = { nav.navigate("artist/$it") },
                             onPlayQueue = playQueue,
+                            onOpenLibrary = {
+                                nav.navigate("library") {
+                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
                         )
                     }
-                    composable("library") { LibraryScreen(onPlayQueue = playQueue) }
+                    composable("library") {
+                        LibraryScreen(
+                            onPlayQueue = playQueue,
+                            onOpenSearch = {
+                                nav.navigate("search") {
+                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                        )
+                    }
                     composable("settings") { SettingsScreen() }
                     composable(
                         "album/{id}",

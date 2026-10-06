@@ -148,7 +148,10 @@ class UpstreamParsingTest {
                 .map { json.decodeFromJsonElement<RawStationEntryDto>(it.value).song }
         assertEquals(listOf("aRZbUYD7", "s2"), songs.map { it?.id })
         // The current (broken) upstream shape carries an error key instead.
-        val broken = json.parseToJsonElement("""{"stationid":"st1","error":"No new song found for current radio."}""") as kotlinx.serialization.json.JsonObject
+        val broken =
+            json.parseToJsonElement(
+                """{"stationid":"st1","error":"No new song found for current radio."}""",
+            ) as kotlinx.serialization.json.JsonObject
         assertTrue(broken.entries.none { it.key.toIntOrNull() != null })
     }
 
@@ -198,6 +201,11 @@ class UpstreamParsingTest {
         assertEquals(setOf("Playlist One", "Top Playlist"), home.playlists.map { it.name }.toSet())
         // Artists rail derived from the trending song's artist map.
         assertEquals(listOf("Artist One"), home.artists.map { it.name })
-        assertTrue(home.trendingSongs.single().downloadUrls.isNotEmpty())
+        assertTrue(
+            home.trendingSongs
+                .single()
+                .downloadUrls
+                .isNotEmpty(),
+        )
     }
 }

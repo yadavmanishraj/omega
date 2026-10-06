@@ -32,7 +32,6 @@ object PlaybackModule {
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
                 true,
-            )
-            .setHandleAudioBecomingNoisy(true)
+            ).setHandleAudioBecomingNoisy(true)
             .build()
 }

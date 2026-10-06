@@ -28,7 +28,7 @@ class DetailViewModel
                 try {
                     album.value = UiState.Success(repo.album(id))
                 } catch (e: Exception) {
-                    album.value = UiState.Error(e.message ?: "Failed")
+                    album.value = UiState.Error("Couldn't load this. Check your connection, then retry.")
                 }
             }
         }
@@ -39,7 +39,7 @@ class DetailViewModel
                 try {
                     playlist.value = UiState.Success(repo.playlist(id))
                 } catch (e: Exception) {
-                    playlist.value = UiState.Error(e.message ?: "Failed")
+                    playlist.value = UiState.Error("Couldn't load this. Check your connection, then retry.")
                 }
             }
         }
@@ -50,7 +50,7 @@ class DetailViewModel
                 try {
                     artist.value = UiState.Success(repo.artist(id))
                 } catch (e: Exception) {
-                    artist.value = UiState.Error(e.message ?: "Failed")
+                    artist.value = UiState.Error("Couldn't load this. Check your connection, then retry.")
                 }
             }
         }

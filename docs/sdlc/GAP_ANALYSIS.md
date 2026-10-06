@@ -1,5 +1,46 @@
 # Gap Analysis — SDLC designs vs. v1 code (commit `a70b050`)
 
+> **Post-rebuild status update — 2026-10-07 (modular rebuild, direct-upstream
+> data layer, redesign).** The app was restructured per
+> [`MODULARIZATION_PLAN.md`](MODULARIZATION_PLAN.md) (16 modules +
+> build-logic convention plugins), the hosted-wrapper data layer was
+> replaced by direct JioSaavn upstream calls per
+> [`UPSTREAM_SPEC.md`](UPSTREAM_SPEC.md) (validated live in
+> [`UPSTREAM_VALIDATION.md`](UPSTREAM_VALIDATION.md)), and Home/Search/
+> Library/Settings + shell were redesigned per
+> [`REDESIGN_SPEC.md`](REDESIGN_SPEC.md). Rows below that this closes
+> are marked inline with **[CLOSED 2026-10-07]**; everything else stands
+> as written. New/remaining honest gaps after the rebuild:
+>
+> - **Fonts deviation:** the redesign's Righteous/Poppins downloadable
+>   fonts are NOT wired — the GMS certs resource could not be validated
+>   without a device build. The full type scale (sizes/weights/leading)
+>   is implemented; families resolve to the platform default via a
+>   single drop-in point in `core/designsystem` Theme.kt.
+> - **Suggestions:** implemented against upstream radio calls, but
+>   `webradio.getSong` is currently broken upstream (always an error
+>   body), so suggestions return empty by design and nothing depends
+>   on them.
+> - **SearchBar:** the redesign assumed `SearchBarInputField`; it does
+>   not exist in material3 1.3.1, so Search uses the deprecated
+>   `SearchBar(query, active, ...)` overload (suppressed, documented).
+> - **Downloads:** deleting a download now removes the file too, and
+>   the Library renders progress/Retry states — but the worker still
+>   only writes a Room row on success, so in-progress/FAILED rows are
+>   not produced yet. Still open.
+> - **Local playlists:** detail view + playback now exist; add-to-
+>   playlist still has no UI entry point, and rename/reorder are still
+>   missing. Still open.
+> - **Room:** `exportSchema` is now true (schema JSON lands on the
+>   first real build); the DB name stays `saavn-music.db` and the
+>   schema is byte-identical to v1 BY DECISION — the modularization
+>   plan required zero data migration, which supersedes the design's
+>   `omega.db` rename.
+> - **Build verification:** v1 was verified on the user's laptop
+>   (commit 1063a0f). The REBUILD is **not yet build-verified** — gates
+>   run in the sandbox were ktlint + a kotlinc parse scan + manual
+>   module-dependency review; the laptop build is the real gate.
+
 > Written 2026-10-07 as part of the SDLC integration commit. This compares the three design
 > deliverables in this folder — [`API_RESEARCH.md`](API_RESEARCH.md),
 > [`UIUX_DESIGN.md`](UIUX_DESIGN.md), [`APP_DESIGN.md`](APP_DESIGN.md) — against the v1 code
@@ -16,17 +57,17 @@
 
 | Area | Design | v1 code | Status |
 |---|---|---|---|
-| Base URL / envelope | `https://saavn.dev/api/`, uniform `{success, data}` envelope | Same default; `ApiResponse<T>(success, data)` modelled | ✅ |
+| Base URL / envelope | `https://saavn.dev/api/`, uniform `{success, data}` envelope | **[CLOSED 2026-10-07 — superseded]** No wrapper at all: the app calls JioSaavn's upstream `api.php` directly (see `UPSTREAM_SPEC.md`); `saavn.dev` no longer exists in DNS | ✅ |
 | Endpoint coverage | 14 public REST endpoints (API research §2) | 12 Retrofit methods: global search, 4 typed searches, `songs/{id}`, suggestions, `albums?id=`, `playlists?id=`, `artists/{id}`, `artists/{id}/songs`, `artists/{id}/albums` | 🟡 |
 | Batch / link resolution (FR-16) | `GET /songs?ids=` / `?link=`, `albums?link=`, `playlists?link=`, `artists?link=` for paste-a-link & batch resolve | No `ids`/`link` variants at all; no paste-a-link UI or deep links | ❌ |
 | Artist paging endpoints | `artists/{id}/songs|albums` with `sortBy`/`sortOrder`, `{total, songs/albums}` envelope | Declared in `SaavnApi` but **never called** — repository only uses `artists/{id}` (`topSongs`/`topAlbums`); response type is also modelled as the search envelope (`SearchResultDto`), and no sort params are passed | ⚠️ |
-| **Lyrics response shape pinning** | Architecture risk R-3 / Phase 1 acceptance: pin the exact `songs/{id}?lyrics=true` shape against live `/docs` + a recorded fixture **before** the player depends on it | **Not pinned.** API research found *there is no lyrics endpoint/route in the public wrapper at all* (only `hasLyrics` + `lyricsId` on the Song DTO). v1 nevertheless sends `?lyrics=true`, embeds an optional `LyricsDto` on `SongDto`, and the player shows "Loading lyrics…" / "No lyrics available". Whether any lyrics ever return from `saavn.dev` is unverified — expect the no-lyrics path in practice | ❌ |
-| Lyrics `<br>` handling | Architecture FR-9: convert HTML `<br>` to newlines (as `jiosaavn-dl` does) | Player renders the raw string; no `<br>` conversion | ❌ |
+| **[CLOSED 2026-10-07]** Lyrics now come from upstream `lyrics.getLyrics` with `lyrics_id` = the song id (live-validated; `<br>` → newline handled in the mapper). The original row: **Lyrics response shape pinning** | Architecture risk R-3 / Phase 1 acceptance: pin the exact `songs/{id}?lyrics=true` shape against live `/docs` + a recorded fixture **before** the player depends on it | **Not pinned.** API research found *there is no lyrics endpoint/route in the public wrapper at all* (only `hasLyrics` + `lyricsId` on the Song DTO). v1 nevertheless sends `?lyrics=true`, embeds an optional `LyricsDto` on `SongDto`, and the player shows "Loading lyrics…" / "No lyrics available". Whether any lyrics ever return from `saavn.dev` is unverified — expect the no-lyrics path in practice | ❌ |
+| Lyrics `<br>` handling | Architecture FR-9: convert HTML `<br>` to newlines (as `jiosaavn-dl` does) | **[CLOSED 2026-10-07]** Converted in the network mapper (`cleanedLyrics`) and unit-tested | ✅ |
 | Error envelope | Failures are `{success:false, message}` + HTTP status; map to a typed result | `ApiResponse` has **no `message` field**; repository ignores `success=false` and throws/catches raw exceptions, surfacing `e.message` to the UI. No `AppResult<T>` type, no error taxonomy (design §8.1), no dispatcher qualifiers (design §8.2) | ⚠️ |
 | DTO tolerance | Lenient parsing + numbers-as-strings defence (`FlexInt/FlexLong`), one bad item must not fail a list (NFR-4) | `ignoreUnknownKeys`/`coerceInputValues` are on, fields have defaults — good start; but no string-number tolerance (e.g. `duration`, `playCount` are strict `Long?`) and one malformed item fails the whole response | 🟡 |
 | Model tiers | 3 tiers (DTO → pure domain with typed `ImageSet`/`StreamLink` quality enums → entity snapshots) in `model/`/`mapper/` packages | Effectively 2 tiers: DTOs are close to the canonical Song model, but domain `Song` is a flattened display model (single `imageUrl`, `List<Pair<String,String>>` for streams, artists pre-joined to a String). No typed quality enums, no mapper package | 🟡 |
 | Image ladder | Pick 50/150/500 by target size via a `bestFor(px)` helper; never assume array order | `bestUrl()` = **last** non-blank entry, used for every surface (rows load 500x500 too) | 🟡 |
-| Home / trending source | No home/trending endpoint exists (research §2.6) → compose Home from curated searches (design D-6/FR-1) | Done exactly that way (evergreen seed searches via typed search, global-search method exists but Home doesn't use `searchAll`) — documented in code. Design intent met, but see "Home cache-first" row in §3 | ✅ |
+| Home / trending source | No home/trending endpoint exists (research §2.6) → compose Home from curated searches (design D-6/FR-1) | **[CLOSED 2026-10-07 — superseded]** Upstream DOES have a home payload: `content.getBrowseModules`, now used with shape-based classification | ✅ |
 | Suggestions / radio | `songs/{id}/suggestions` = autoplay/queue-extension engine; cache & prefetch (expensive: 2 upstream calls) | Endpoint + repository + `PlayerViewModel.suggestions()` exist, but **nothing ever calls it** — no autoplay-on-queue-end, no "Related" surface, no caching | 🟡 |
 
 ## 2. UI/UX (vs. `UIUX_DESIGN.md`)
@@ -34,17 +75,17 @@
 | Area | Design | v1 code | Status |
 |---|---|---|---|
 | No login / no sign-up | No accounts anywhere; app opens straight into music | Fully honoured — no auth screens, no onboarding gate, first composition is Home | ✅ |
-| Core theme tokens | Dark bg `#0B0F0E`, surface `#121715`, primary `#3BE477`; light bg `#F7FAF8`, primary `#006B32` (UIUX §3.1) | **Aligned in this integration commit** (`Theme.kt`). Remaining token roles (containers, outline, error, tertiary, full type scale, spacing/radius tokens) not yet encoded | 🟡 |
+| Core theme tokens | Dark bg `#0B0F0E`, surface `#121715`, primary `#3BE477`; light bg `#F7FAF8`, primary `#006B32` (UIUX §3.1) | **[CLOSED 2026-10-07 — superseded by REDESIGN_SPEC]** Full token system in `:core:designsystem` (midnight/indigo schemes, complete role sets, type scale, `OmegaSpacing`/`OmegaRadius`); fonts are the documented deviation above | ✅ |
 | Bottom nav + mini-player | Home / Search / Library, persistent mini-player, Settings reachable | Present (plus Settings as a 4th nav item, where design puts Settings behind a top-app-bar action) | 🟡 |
 | **Shared-element transition (signature)** | Mini-player → Full Player **shared-element artwork** animation, 350 ms; fallback slide-up + scale is allowed *only if flagged*; a plain state swap/fade is "not acceptable" (§7) | **Missing.** Full player is a boolean state switch (`showPlayer`) reusing the same artwork composable — there is no `SharedTransitionLayout`, no slide/scale animation, and this was not flagged in the v1 PR notes. Flagged here instead | ❌ |
 | Artwork-derived palette | Palette extraction from artwork, player/header gradients, contrast-scrim invariant, teal fallback, 300 ms crossfade (§3.1.3) | **Missing.** `GradientHeader` tints from the theme `primary` colour, not the artwork; "Dynamic / artwork colors" setting actually toggles Material You dynamic colour, not artwork palette. No Palette dependency | ❌ |
 | Full player | 64 dp white play button rule, player tab pager (Up Next / Lyrics / Related), swipe artwork for next/prev, blurred-artwork background | Play/pause is a themed `FilledIconButton` (not the white-on-black rule); queue is a bottom sheet (allowed presentation), lyrics is an inline text block under the controls, no Related tab, no artwork swipe gestures, no blur background. Seek slider, shuffle/repeat, speed chips, sleep timer *are* present | 🟡 |
 | Lyrics view | Dedicated `LyricsView` (§5.11): unsynced paragraph treatment, copy button, designed no-lyrics state, synced/karaoke mode if timestamps exist | Inline `Text` toggle in the player only; no copy, no scroll treatment, no synced mode — and see the API row above: the data source itself is unproven | 🟡 |
-| Search UX | Debounced (300 ms) global search with **top-result** section, chip-filtered typed results, suggestions ghost rows, paging footer | No debounce (search fires only on submit), `searchAll` is never used by the UI (4 typed calls instead, no top result), tabs exist, recent searches exist. No voice-search affordance | 🟡 |
+| Search UX | Debounced (300 ms) global search with **top-result** section, chip-filtered typed results, suggestions ghost rows, paging footer | **[CLOSED 2026-10-07]** 300 ms debounce, global top-results section (resolved by id before playback), typed tabs, FlowRow recent chips with per-chip removal, distinct no-results state. Paging footer + voice search still missing | 🟡 |
 | Loading / empty / error | Shimmer skeletons, designed empty states, inline retry, offline banner (§8) | `ShimmerList`, `ErrorState` (with retry), `EmptyState` are implemented and used — but the shimmer is static boxes (no shimmer animation), and there is **no offline banner / connectivity state** anywhere | 🟡 |
 | Queue | Up Next list with jump, remove, drag-reorder (reorder v1.1 per FR-18) | Queue sheet lists songs and supports jump-to-tap only; no remove/reorder | 🟡 |
 | Detail headers | Collapsing artwork-palette `DetailHeader` (176 dp art, eyebrow, meta, Play pill + Shuffle) | Static header with 180 dp artwork, name/artist/description, Play all + Shuffle buttons; no collapse behaviour, no palette gradient | 🟡 |
-| Home "Recently played" | Cards navigate / play | Cards render but their click handler is an empty lambda — tapping does nothing | ⚠️ |
+| Home "Recently played" | Cards navigate / play | **[CLOSED 2026-10-07]** "Jump back in" cards play the history queue from the tapped index | ✅ |
 | Accessibility | ≥48 dp targets, content descriptions on **every** icon button, seek semantics, font-scale rules (§9, NFR-6) | Most icon buttons pass `null` content descriptions; no seek TalkBack actions; touch-target sizes unverified | ❌ |
 | Responsive / adaptive | Tablet/foldable list-detail layouts (design §10, architecture §2 `adaptive` skill) | Phone-portrait single column only | ❌ |
 
@@ -52,7 +93,7 @@
 
 | Area | Design | v1 code | Status |
 |---|---|---|---|
-| Overall shape | Single `:app` module, strict packages, MVVM + repositories, Hilt, StateFlow `UiState` | Matches in outline (single module, Hilt, `UiState` sealed type, ViewModels) — but packages are looser than §3.2 (no `core/`, `feature/`, mapper packages) and there is **one** `MusicRepository` class instead of the designed `Music/Library/Download/Settings` repository split | 🟡 |
+| Overall shape | Single `:app` module, strict packages, MVVM + repositories, Hilt, StateFlow `UiState` | **[CLOSED 2026-10-07]** Now in Android-style modularization: 16 modules + build-logic (see `MODULARIZATION_PLAN.md`); per-module `di/` packages replaced the god AppModule | ✅ |
 | Room schema | DB `omega.db`, `exportSchema = true` + committed schemas, **shared `song` snapshot table** referenced by favourite/playlist/history/download tables, transactional snapshot writes, history cap 500, recent-search cap 20 | DB is named `saavn-music.db`, `exportSchema = false`, no schema files; each table stores its **own denormalised copy** of song fields (the exact divergence §4.4 warns about); history query caps *display* at 50 but the table grows unbounded; recent searches display-cap 10, no pruning; no transactions beyond single DAO calls | ⚠️ |
 | Settings (DataStore) | File `omega_settings`; keys incl. theme mode `SYSTEM|LIGHT|DARK` (default Dark), stream quality default `K160`, dynamic colour default `false`, cache size, Wi-Fi-only downloads, autoplay toggle; base URL applied live via interceptor, no restart | File is named `settings`; only 5 keys (base URL, stream/download quality, dark boolean, dynamic boolean); defaults differ (stream `320kbps`, dynamic `true`); theme is a boolean (no System option); **base URL is read once at Hilt graph creation — changing it needs an app restart** (documented in UI, but contradicts the design) | ⚠️ |
 | **Paging decision** | Architecture D-4 (§7.2) decided: **manual paging in the ViewModel** (`PagedListState`, append-on-scroll) — explicitly *not* Paging 3 in v1.0, because upstream envelopes are inconsistent | **Neither was implemented.** Search fetches a single page (limit 20) and stops; `total`/`start` are discarded; playlists fetch one page at `limit=100` — which also trips the API-research gotcha that a paged playlist call overwrites `songCount` with the slice length and truncates the track list at the limit; artist lists never page at all | ❌ |
@@ -77,7 +118,7 @@
 |---|---|---|---|
 | **Incognito listening toggle** | Settings → "Incognito listening" (default OFF, "Don't save plays to history"), History screen banner while on (§5.9/§5.17) | **Missing entirely** — no setting key, no toggle, `recordPlay()` is unconditional, no banner | ❌ |
 | Clear history / searches / cache from Settings | Settings "Data & Privacy" group | Clear-history lives in the Library History tab; clear-searches in Search; neither is in Settings; no cache-size display or clear-cache action (and no app-managed cache to clear yet — §3) | 🟡 |
-| Theme control | `SYSTEM / LIGHT / DARK` segmented control, default Dark | Dark on/off switch only (default on); no System option | 🟡 |
+| Theme control | `SYSTEM / LIGHT / DARK` segmented control, default Dark | **[CLOSED 2026-10-07]** Segmented System/Dark/Light control (`themeMode` key, migrated from the old boolean, default Dark) | ✅ |
 | Playback / download quality | Separate pickers over the API ladder | Present (48/96/160/320 chips for both) — but stream default is 320, design default is 160 | 🟡 |
 
 ## 5. Phased roadmap

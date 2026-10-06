@@ -62,6 +62,13 @@ data class LocalPlaylistSongEntity(
     val position: Int = 0,
 )
 
+/** Projection row for the playlist list (playlist + its song count). */
+data class LocalPlaylistRow(
+    val id: Long,
+    val name: String,
+    val songCount: Int,
+)
+
 @Dao interface LibraryDao {
     @Query("SELECT * FROM favorites ORDER BY addedAt DESC")
     fun favorites(): kotlinx.coroutines.flow.Flow<List<FavoriteEntity>>
@@ -108,8 +115,12 @@ data class LocalPlaylistSongEntity(
     @Query("DELETE FROM recent_searches")
     suspend fun clearRecentSearches()
 
-    @Query("SELECT * FROM local_playlists ORDER BY createdAt DESC")
-    fun playlists(): kotlinx.coroutines.flow.Flow<List<LocalPlaylistEntity>>
+    @Query(
+        "SELECT p.id AS id, p.name AS name, " +
+            "(SELECT COUNT(*) FROM local_playlist_songs s WHERE s.playlistId = p.id) AS songCount " +
+            "FROM local_playlists p ORDER BY p.createdAt DESC",
+    )
+    fun playlists(): kotlinx.coroutines.flow.Flow<List<LocalPlaylistRow>>
 
     @Insert suspend fun createPlaylist(e: LocalPlaylistEntity): Long
 
@@ -124,7 +135,14 @@ data class LocalPlaylistSongEntity(
 }
 
 @Database(
-    entities = [FavoriteEntity::class, DownloadEntity::class, HistoryEntity::class, RecentSearchEntity::class, LocalPlaylistEntity::class, LocalPlaylistSongEntity::class],
+    entities = [
+        FavoriteEntity::class,
+        DownloadEntity::class,
+        HistoryEntity::class,
+        RecentSearchEntity::class,
+        LocalPlaylistEntity::class,
+        LocalPlaylistSongEntity::class,
+    ],
     version = 1,
     exportSchema = true,
 )

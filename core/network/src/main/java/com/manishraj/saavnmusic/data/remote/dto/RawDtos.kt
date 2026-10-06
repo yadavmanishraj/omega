@@ -22,9 +22,8 @@ import kotlinx.serialization.json.intOrNull
  * as JSON strings, declared fields are sometimes absent, and undeclared
  * fields appear freely. Every field here is therefore nullable/defaulted
  * and the shared Json config uses ignoreUnknownKeys.
- */
-
-/** Accepts a JSON number OR a numeric string (upstream is inconsistent even within one payload family). */
+ *
+ * The [FlexibleIntSerializer] below accepts a JSON number OR a numeric string (upstream is inconsistent even within one payload family). */
 object FlexibleIntSerializer : KSerializer<Int> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("com.manishraj.saavnmusic.FlexibleInt", PrimitiveKind.INT)

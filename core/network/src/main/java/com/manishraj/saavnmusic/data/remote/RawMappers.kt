@@ -112,7 +112,8 @@ fun RawAlbumDto.toDomain(): Album =
         id = id.orEmpty(),
         name = unescapeHtml(title),
         artist =
-            moreInfo?.artistMap
+            moreInfo
+                ?.artistMap
                 .primaryNames()
                 .ifBlank { moreInfo?.artistMap.allNames() }
                 .ifBlank { unescapeHtml(moreInfo?.music) },
@@ -271,8 +272,12 @@ fun RawBrowseModulesDto.toHomeContent(json: Json): HomeContent {
     // browse modules carry no dedicated artist section.
     val artists =
         rawSongs
-            .flatMap { it.moreInfo?.artistMap?.primary.orEmpty() }
-            .filter { !it.id.isNullOrBlank() }
+            .flatMap {
+                it.moreInfo
+                    ?.artistMap
+                    ?.primary
+                    .orEmpty()
+            }.filter { !it.id.isNullOrBlank() }
             .distinctBy { it.id }
             .take(15)
             .map { it.toDomainArtist() }

@@ -40,8 +40,9 @@ class JioSaavnClient
             ctx: String = WEB_CTX,
         ): JsonElement =
             withContext(Dispatchers.IO) {
-                val base = endpoint.trim().toHttpUrlOrNull() ?: JIOSAAVN_API_ENDPOINT.toHttpUrlOrNull()
-                    ?: throw IOException("Invalid API endpoint")
+                val base =
+                    endpoint.trim().toHttpUrlOrNull() ?: JIOSAAVN_API_ENDPOINT.toHttpUrlOrNull()
+                        ?: throw IOException("Invalid API endpoint")
                 val builder = base.newBuilder()
                 if (!base.encodedPath.endsWith("api.php")) {
                     builder.addPathSegment("api.php")
