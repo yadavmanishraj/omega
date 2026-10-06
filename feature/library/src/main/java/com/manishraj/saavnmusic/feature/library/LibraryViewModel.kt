@@ -74,4 +74,14 @@ class LibraryViewModel
         ) {
             viewModelScope.launch { repo.addToPlaylist(pid, s) }
         }
+
+        fun createPlaylistAndAdd(
+            name: String,
+            s: Song,
+        ) {
+            viewModelScope.launch {
+                val playlistId = repo.createPlaylist(name)
+                repo.addToPlaylist(playlistId, s)
+            }
+        }
     }

@@ -40,6 +40,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,9 +55,11 @@ import com.manishraj.saavnmusic.ui.components.CircularArtwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerGrid
 import com.manishraj.saavnmusic.ui.components.ShimmerList
+import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
@@ -82,7 +87,9 @@ fun SearchScreen(
     val recent by vm.recent.collectAsState()
     val tab by vm.tab.collectAsState()
     val searchedQuery by vm.searchedQuery.collectAsState()
+    val localPlaylists by vm.playlists.collectAsState()
     val online by vm.online.collectAsState()
+    var playlistTarget by remember { mutableStateOf<Song?>(null) }
     val isIdle = searchedQuery.isBlank()
     val noResults =
         !isIdle &&
@@ -225,12 +232,24 @@ fun SearchScreen(
                             if (topResults.isNotEmpty()) {
                                 item { SectionHeader("Top results") }
                                 items(topResults.take(3)) { item ->
-                                    SongRow(item, { vm.resolveAndPlay(item, onPlayQueue) })
+                                    SongRow(
+                                        item,
+                                        { vm.resolveAndPlay(item, onPlayQueue) },
+                                        trailing = {
+                                            SongOverflowMenuButton(item) { playlistTarget = item }
+                                        },
+                                    )
                                 }
                                 item { SectionHeader("Songs") }
                             }
                             items(s.data) { song ->
-                                SongRow(song, { onPlayQueue(s.data, s.data.indexOf(song)) })
+                                SongRow(
+                                    song,
+                                    { onPlayQueue(s.data, s.data.indexOf(song)) },
+                                    trailing = {
+                                        SongOverflowMenuButton(song) { playlistTarget = song }
+                                    },
+                                )
                             }
                         }
                 }
@@ -289,6 +308,22 @@ fun SearchScreen(
                         }
                     }
                 }
+        }
+
+        // No snackbar host on Search: the picker closing is the confirmation.
+        playlistTarget?.let { song ->
+            PlaylistPickerDialog(
+                playlists = localPlaylists,
+                onPick = { playlist ->
+                    vm.addToPlaylist(playlist.id, song)
+                    playlistTarget = null
+                },
+                onCreatePlaylist = { name ->
+                    vm.createPlaylistAndAdd(name, song)
+                    playlistTarget = null
+                },
+                onDismiss = { playlistTarget = null },
+            )
         }
     }
 }

@@ -28,9 +28,12 @@
 >   the Library renders progress/Retry states — but the worker still
 >   only writes a Room row on success, so in-progress/FAILED rows are
 >   not produced yet. Still open.
-> - **Local playlists:** detail view + playback now exist; add-to-
->   playlist still has no UI entry point, and rename/reorder are still
->   missing. Still open.
+> - **Local playlists:** detail view + playback now exist; rename and
+>   reorder are still missing. Still open. **[Add-to-playlist UI entry
+>   point added on `feat/add-to-playlist`: song overflow menus in Home,
+>   Search, Detail and Library open a shared `:core:ui` playlist picker
+>   (with inline playlist creation); Home's offline Downloads path now
+>   deep-links to the Library Downloads tab.]**
 > - **Room:** `exportSchema` is now true (schema JSON lands on the
 >   first real build); the DB name stays `saavn-music.db` and the
 >   schema is byte-identical to v1 BY DECISION — the modularization

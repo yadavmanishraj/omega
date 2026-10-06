@@ -20,6 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,8 +33,10 @@ import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.GradientHeader
 import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerList
+import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 
@@ -43,11 +48,13 @@ fun AlbumScreen(
 ) {
     LaunchedEffect(id) { vm.loadAlbum(id) }
     val s by vm.album.collectAsState()
+    val requestAddToPlaylist = rememberPlaylistPicker(vm)
     DetailList(
         s,
         { it.songs },
         { a -> SongListHeader(a.name, a.artist, a.imageUrl, a.description) },
         onPlayQueue,
+        onAddToPlaylist = requestAddToPlaylist,
     ) { vm.loadAlbum(id) }
 }
 
@@ -59,12 +66,40 @@ fun PlaylistScreen(
 ) {
     LaunchedEffect(id) { vm.loadPlaylist(id) }
     val s by vm.playlist.collectAsState()
+    val requestAddToPlaylist = rememberPlaylistPicker(vm)
     DetailList(
         s,
         { it.songs },
         { p -> SongListHeader(p.name, "Playlist", p.imageUrl, p.description) },
         onPlayQueue,
+        onAddToPlaylist = requestAddToPlaylist,
     ) { vm.loadPlaylist(id) }
+}
+
+/**
+ * Hosts the add-to-playlist picker for a detail screen: returns the
+ * request callback handed to song rows. No snackbar host exists on
+ * these screens, so the picker closing is the confirmation.
+ */
+@Composable
+private fun rememberPlaylistPicker(vm: DetailViewModel): (Song) -> Unit {
+    val playlists by vm.playlists.collectAsState()
+    var target by remember { mutableStateOf<Song?>(null) }
+    target?.let { song ->
+        PlaylistPickerDialog(
+            playlists = playlists,
+            onPick = { playlist ->
+                vm.addToPlaylist(playlist.id, song)
+                target = null
+            },
+            onCreatePlaylist = { name ->
+                vm.createPlaylistAndAdd(name, song)
+                target = null
+            },
+            onDismiss = { target = null },
+        )
+    }
+    return { song -> target = song }
 }
 
 @Composable
@@ -73,6 +108,7 @@ fun <T> DetailList(
     songs: (T) -> List<Song>,
     header: @Composable (T) -> Unit,
     play: (List<Song>, Int) -> Unit,
+    onAddToPlaylist: (Song) -> Unit,
     retry: () -> Unit,
 ) {
     when (state) {
@@ -92,7 +128,15 @@ fun <T> DetailList(
                         OutlinedButton(onClick = { play(list.shuffled(), 0) }) { Text("Shuffle") }
                     }
                 }
-                items(list) { song -> SongRow(song, { play(list, list.indexOf(song)) }) }
+                items(list) { song ->
+                    SongRow(
+                        song,
+                        { play(list, list.indexOf(song)) },
+                        trailing = {
+                            SongOverflowMenuButton(song) { onAddToPlaylist(song) }
+                        },
+                    )
+                }
             }
         }
     }
@@ -132,6 +176,7 @@ fun ArtistScreen(
 ) {
     LaunchedEffect(id) { vm.loadArtist(id) }
     val s by vm.artist.collectAsState()
+    val requestAddToPlaylist = rememberPlaylistPicker(vm)
     when (val a = s) {
         is UiState.Loading -> ShimmerList()
         is UiState.Error -> ErrorState(a.message, onRetry = { vm.loadArtist(id) })
@@ -146,7 +191,15 @@ fun ArtistScreen(
                     )
                 }
                 item { SectionHeader("Top songs") }
-                items(a.data.topSongs) { song -> SongRow(song, { onPlayQueue(a.data.topSongs, a.data.topSongs.indexOf(song)) }) }
+                items(a.data.topSongs) { song ->
+                    SongRow(
+                        song,
+                        { onPlayQueue(a.data.topSongs, a.data.topSongs.indexOf(song)) },
+                        trailing = {
+                            SongOverflowMenuButton(song) { requestAddToPlaylist(song) }
+                        },
+                    )
+                }
                 item { SectionHeader("Top albums") }
                 item { LazyRow { items(a.data.topAlbums) { al -> MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) } } } }
             }

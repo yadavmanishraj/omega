@@ -58,9 +58,17 @@ import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
+import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
+import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import kotlinx.coroutines.launch
+
+/** Library tab indices, in tab-bar order. Navigation deep-links use these. */
+const val LIBRARY_TAB_FAVORITES = 0
+const val LIBRARY_TAB_DOWNLOADS = 1
+const val LIBRARY_TAB_HISTORY = 2
+const val LIBRARY_TAB_PLAYLISTS = 3
 
 private fun formatBytes(bytes: Long): String =
     when {
@@ -92,8 +100,11 @@ fun LibraryScreen(
     vm: LibraryViewModel = hiltViewModel(),
     onPlayQueue: (List<Song>, Int) -> Unit,
     onOpenSearch: () -> Unit,
+    initialTab: Int = LIBRARY_TAB_FAVORITES,
 ) {
-    var tab by remember { mutableIntStateOf(0) }
+    // Keyed on initialTab: a navigation request carrying a different
+    // tab (e.g. Home's offline "Downloads" path) re-selects it.
+    var tab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
     val favs by vm.favorites.collectAsState()
     val dls by vm.downloads.collectAsState()
     val hist by vm.history.collectAsState()
@@ -104,16 +115,27 @@ fun LibraryScreen(
     var confirmClearHistory by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DownloadInfo?>(null) }
     var openPlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
+    var playlistTarget by remember { mutableStateOf<Song?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val confirmAdded: (String) -> Unit = { playlistName ->
+        scope.launch {
+            snackbar.showSnackbar(
+                "Added to $playlistName",
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
 
     val playlist = openPlaylist
     if (playlist != null) {
         LocalPlaylistDetail(
             vm = vm,
             playlist = playlist,
+            playlists = pls,
             onBack = { openPlaylist = null },
             onPlayQueue = onPlayQueue,
+            onAddedToPlaylist = confirmAdded,
         )
         return
     }
@@ -121,7 +143,7 @@ fun LibraryScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab == 3) {
+            if (tab == LIBRARY_TAB_PLAYLISTS) {
                 FloatingActionButton(onClick = { showCreate = true }) {
                     Icon(Icons.Filled.Add, contentDescription = "New playlist")
                 }
@@ -147,7 +169,7 @@ fun LibraryScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (tab == 2 && hist.isNotEmpty()) {
+                if (tab == LIBRARY_TAB_HISTORY && hist.isNotEmpty()) {
                     var menuOpen by remember { mutableStateOf(false) }
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Filled.MoreVert, contentDescription = "More options")
@@ -177,7 +199,7 @@ fun LibraryScreen(
                 onSelect = { tab = it },
             )
 
-            if (tab != 3) {
+            if (tab != LIBRARY_TAB_PLAYLISTS) {
                 Row(
                     Modifier.padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
@@ -224,7 +246,7 @@ fun LibraryScreen(
             }
 
             when (tab) {
-                0 ->
+                LIBRARY_TAB_FAVORITES ->
                     if (favs.isEmpty()) {
                         EmptyState(
                             "No favorites yet",
@@ -238,25 +260,28 @@ fun LibraryScreen(
                                     song,
                                     { onPlayQueue(ordered, ordered.indexOf(song)) },
                                     trailing = {
-                                        IconButton(onClick = {
-                                            vm.unfavorite(song)
-                                            scope.launch {
-                                                val result =
-                                                    snackbar.showSnackbar(
-                                                        "Removed from favorites",
-                                                        actionLabel = "Undo",
-                                                        duration = SnackbarDuration.Short,
-                                                    )
-                                                if (result == SnackbarResult.ActionPerformed) {
-                                                    vm.restoreFavorite(song)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            SongOverflowMenuButton(song) { playlistTarget = song }
+                                            IconButton(onClick = {
+                                                vm.unfavorite(song)
+                                                scope.launch {
+                                                    val result =
+                                                        snackbar.showSnackbar(
+                                                            "Removed from favorites",
+                                                            actionLabel = "Undo",
+                                                            duration = SnackbarDuration.Short,
+                                                        )
+                                                    if (result == SnackbarResult.ActionPerformed) {
+                                                        vm.restoreFavorite(song)
+                                                    }
                                                 }
+                                            }) {
+                                                Icon(
+                                                    Icons.Filled.Favorite,
+                                                    contentDescription = "Remove ${song.name} from favorites",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                )
                                             }
-                                        }) {
-                                            Icon(
-                                                Icons.Filled.Favorite,
-                                                contentDescription = "Remove ${song.name} from favorites",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                            )
                                         }
                                     },
                                 )
@@ -264,7 +289,7 @@ fun LibraryScreen(
                         }
                     }
 
-                1 ->
+                LIBRARY_TAB_DOWNLOADS ->
                     if (dls.isEmpty()) {
                         EmptyState(
                             "No downloads yet",
@@ -334,7 +359,7 @@ fun LibraryScreen(
                         }
                     }
 
-                2 ->
+                LIBRARY_TAB_HISTORY ->
                     if (hist.isEmpty()) {
                         EmptyState(
                             "Nothing played yet",
@@ -344,7 +369,13 @@ fun LibraryScreen(
                         val ordered = sorted(hist, sortMode) { it.name }
                         LazyColumn {
                             items(ordered) { song ->
-                                SongRow(song, { onPlayQueue(ordered, ordered.indexOf(song)) })
+                                SongRow(
+                                    song,
+                                    { onPlayQueue(ordered, ordered.indexOf(song)) },
+                                    trailing = {
+                                        SongOverflowMenuButton(song) { playlistTarget = song }
+                                    },
+                                )
                             }
                         }
                     }
@@ -382,6 +413,23 @@ fun LibraryScreen(
                     }
             }
         }
+    }
+
+    playlistTarget?.let { song ->
+        PlaylistPickerDialog(
+            playlists = pls,
+            onPick = { playlist ->
+                vm.addToPlaylist(playlist.id, song)
+                playlistTarget = null
+                confirmAdded(playlist.name)
+            },
+            onCreatePlaylist = { name ->
+                vm.createPlaylistAndAdd(name, song)
+                playlistTarget = null
+                confirmAdded(name)
+            },
+            onDismiss = { playlistTarget = null },
+        )
     }
 
     if (confirmClearHistory) {
@@ -510,12 +558,15 @@ private fun LibraryTabs(
 private fun LocalPlaylistDetail(
     vm: LibraryViewModel,
     playlist: LocalPlaylist,
+    playlists: List<LocalPlaylist>,
     onBack: () -> Unit,
     onPlayQueue: (List<Song>, Int) -> Unit,
+    onAddedToPlaylist: (String) -> Unit,
 ) {
     val songs by produceState<List<Song>>(emptyList(), playlist.id) {
         vm.playlistSongs(playlist.id).collect { value = it }
     }
+    var playlistTarget by remember { mutableStateOf<Song?>(null) }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
@@ -531,14 +582,37 @@ private fun LocalPlaylistDetail(
         if (songs.isEmpty()) {
             EmptyState(
                 "No songs yet",
-                "Open a song's menu in the player to add it to this playlist.",
+                "Use a song's ⋮ menu anywhere in the app to add it to a playlist.",
             )
         } else {
             LazyColumn {
                 items(songs) { song ->
-                    SongRow(song, { onPlayQueue(songs, songs.indexOf(song)) })
+                    SongRow(
+                        song,
+                        { onPlayQueue(songs, songs.indexOf(song)) },
+                        trailing = {
+                            SongOverflowMenuButton(song) { playlistTarget = song }
+                        },
+                    )
                 }
             }
         }
+    }
+
+    playlistTarget?.let { song ->
+        PlaylistPickerDialog(
+            playlists = playlists,
+            onPick = { picked ->
+                vm.addToPlaylist(picked.id, song)
+                playlistTarget = null
+                onAddedToPlaylist(picked.name)
+            },
+            onCreatePlaylist = { name ->
+                vm.createPlaylistAndAdd(name, song)
+                playlistTarget = null
+                onAddedToPlaylist(name)
+            },
+            onDismiss = { playlistTarget = null },
+        )
     }
 }

@@ -5,10 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.manishraj.saavnmusic.data.repository.MusicRepository
 import com.manishraj.saavnmusic.domain.Album
 import com.manishraj.saavnmusic.domain.Artist
+import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Playlist
+import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,6 +26,25 @@ class DetailViewModel
         val album = MutableStateFlow<UiState<Album>>(UiState.Loading)
         val playlist = MutableStateFlow<UiState<Playlist>>(UiState.Loading)
         val artist = MutableStateFlow<UiState<Artist>>(UiState.Loading)
+        val playlists: StateFlow<List<LocalPlaylist>> =
+            repo.localPlaylists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        fun addToPlaylist(
+            playlistId: Long,
+            song: Song,
+        ) {
+            viewModelScope.launch { repo.addToPlaylist(playlistId, song) }
+        }
+
+        fun createPlaylistAndAdd(
+            name: String,
+            song: Song,
+        ) {
+            viewModelScope.launch {
+                val playlistId = repo.createPlaylist(name)
+                repo.addToPlaylist(playlistId, song)
+            }
+        }
 
         fun loadAlbum(id: String) {
             viewModelScope.launch {

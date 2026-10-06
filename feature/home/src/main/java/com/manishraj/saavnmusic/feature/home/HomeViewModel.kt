@@ -7,6 +7,7 @@ import com.manishraj.saavnmusic.data.repository.MusicRepository
 import com.manishraj.saavnmusic.domain.Album
 import com.manishraj.saavnmusic.domain.Artist
 import com.manishraj.saavnmusic.domain.DownloadInfo
+import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Playlist
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
@@ -48,9 +49,28 @@ class HomeViewModel
             repo.downloads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         val favorites: StateFlow<List<Song>> =
             repo.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        val playlists: StateFlow<List<LocalPlaylist>> =
+            repo.localPlaylists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         init {
             load()
+        }
+
+        fun addToPlaylist(
+            playlistId: Long,
+            song: Song,
+        ) {
+            viewModelScope.launch { repo.addToPlaylist(playlistId, song) }
+        }
+
+        fun createPlaylistAndAdd(
+            name: String,
+            song: Song,
+        ) {
+            viewModelScope.launch {
+                val playlistId = repo.createPlaylist(name)
+                repo.addToPlaylist(playlistId, song)
+            }
         }
 
         fun load() {
