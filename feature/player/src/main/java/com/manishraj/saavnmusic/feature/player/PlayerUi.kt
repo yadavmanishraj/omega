@@ -1,5 +1,8 @@
 package com.manishraj.saavnmusic.feature.player
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +50,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -56,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +70,7 @@ import androidx.work.WorkManager
 import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
@@ -81,69 +87,84 @@ fun MiniPlayer(
 ) {
     val st by vm.state.collectAsState()
     val cur = st.current ?: return
-    Surface(onClick = onOpen, tonalElevation = 3.dp) {
-        Column {
-            val progress =
-                if (st.durationMs > 0) {
-                    (st.positionMs.toFloat() / st.durationMs).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier =
+    // Artwork tint (UIUX_DESIGN §3.1.3): the container takes the
+    // artwork's darkened color, crossfading 300 ms on track change.
+    val palette = rememberArtworkPalette(cur.imageUrl)
+    val containerColor by animateColorAsState(
+        targetValue = palette.mutedDark,
+        animationSpec = tween(durationMillis = 300),
+        label = "miniPlayerContainer",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = palette.onMutedDark,
+        animationSpec = tween(durationMillis = 300),
+        label = "miniPlayerContent",
+    )
+    Surface(onClick = onOpen, tonalElevation = 3.dp, color = containerColor) {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Column {
+                val progress =
+                    if (st.durationMs > 0) {
+                        (st.positionMs.toFloat() / st.durationMs).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(2.dp),
+                )
+                Row(
                     Modifier
                         .fillMaxWidth()
-                        .height(2.dp),
-            )
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(OmegaSpacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Artwork(cur.imageUrl, 48, OmegaRadius.md, contentDescription = cur.name)
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        cur.name,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        cur.artist,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style =
-                            if (LocalDensity.current.fontScale > 1.3f) {
-                                MaterialTheme.typography.bodyMedium
-                            } else {
-                                MaterialTheme.typography.bodySmall
-                            },
-                    )
-                }
-                // Fixed-size slot: the spinner appears here without
-                // shifting the transport buttons (no layout jumping).
-                Box(
-                    Modifier.size(24.dp),
-                    contentAlignment = Alignment.Center,
+                        .padding(OmegaSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (st.isBuffering) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Artwork(cur.imageUrl, 48, OmegaRadius.md, contentDescription = cur.name)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            cur.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            cur.artist,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style =
+                                if (LocalDensity.current.fontScale > 1.3f) {
+                                    MaterialTheme.typography.bodyMedium
+                                } else {
+                                    MaterialTheme.typography.bodySmall
+                                },
+                        )
                     }
-                }
-                IconButton(onClick = { vm.player.prev() }) {
-                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
-                }
-                IconButton(onClick = { vm.player.playPause() }) {
-                    Icon(
-                        if (st.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (st.isPlaying) "Pause" else "Play",
-                    )
-                }
-                IconButton(onClick = { vm.player.next() }) {
-                    Icon(Icons.Filled.SkipNext, contentDescription = "Next")
+                    // Fixed-size slot: the spinner appears here without
+                    // shifting the transport buttons (no layout jumping).
+                    Box(
+                        Modifier.size(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (st.isBuffering) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                    IconButton(onClick = { vm.player.prev() }) {
+                        Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
+                    }
+                    IconButton(onClick = { vm.player.playPause() }) {
+                        Icon(
+                            if (st.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (st.isPlaying) "Pause" else "Play",
+                        )
+                    }
+                    IconButton(onClick = { vm.player.next() }) {
+                        Icon(Icons.Filled.SkipNext, contentDescription = "Next")
+                    }
                 }
             }
         }
@@ -169,6 +190,25 @@ fun FullPlayer(
         return
     }
     val fav by vm.isFavorite(cur.id).collectAsState(false)
+    // Artwork gradient (UIUX_DESIGN §3.1.3): mutedDark at the top
+    // crossfading 300 ms on track change, theme background at the
+    // bottom. Header text/icons sit on the artwork color, so they use
+    // the palette's contrast-checked on-color in both themes.
+    val palette = rememberArtworkPalette(cur.imageUrl)
+    val gradientTop by animateColorAsState(
+        targetValue = palette.mutedDark,
+        animationSpec = tween(durationMillis = 300),
+        label = "playerGradientTop",
+    )
+    val artworkContentColor by animateColorAsState(
+        targetValue = palette.onMutedDark,
+        animationSpec = tween(durationMillis = 300),
+        label = "playerArtworkContent",
+    )
+    val playerBrush =
+        Brush.verticalGradient(
+            listOf(gradientTop, MaterialTheme.colorScheme.background),
+        )
     var showQueue by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     var lyrics by remember { mutableStateOf<String?>(null) }
@@ -186,31 +226,34 @@ fun FullPlayer(
     Column(
         Modifier
             .fillMaxSize()
+            .background(playerBrush)
             .padding(OmegaSpacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth()) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Collapse player")
+        CompositionLocalProvider(LocalContentColor provides artworkContentColor) {
+            Row(Modifier.fillMaxWidth()) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Collapse player")
+                }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { showQueue = true }) {
+                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue")
+                }
             }
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = { showQueue = true }) {
-                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue")
-            }
+            Artwork(cur.imageUrl, 300, OmegaRadius.xl, contentDescription = cur.name)
+            Spacer(Modifier.height(OmegaSpacing.xl))
+            Text(
+                cur.name,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                cur.artist,
+                style = MaterialTheme.typography.bodyLarge,
+                color = artworkContentColor,
+            )
         }
-        Artwork(cur.imageUrl, 300, OmegaRadius.xl, contentDescription = cur.name)
-        Spacer(Modifier.height(OmegaSpacing.xl))
-        Text(
-            cur.name,
-            style = MaterialTheme.typography.headlineSmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            cur.artist,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Spacer(Modifier.height(OmegaSpacing.lg))
         var scrub by remember { mutableStateOf<Float?>(null) }
         Slider(
