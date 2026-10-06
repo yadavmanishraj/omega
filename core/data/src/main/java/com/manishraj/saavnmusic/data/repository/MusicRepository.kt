@@ -1,8 +1,12 @@
 package com.manishraj.saavnmusic.data.repository
 import com.manishraj.saavnmusic.data.local.*
 import com.manishraj.saavnmusic.data.remote.SaavnApi
+import com.manishraj.saavnmusic.data.settings.AppSettings
+import com.manishraj.saavnmusic.data.settings.SettingsRepository
 import com.manishraj.saavnmusic.data.remote.dto.*
 import com.manishraj.saavnmusic.domain.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.*
 
 @Singleton class MusicRepository
@@ -10,7 +14,14 @@ import javax.inject.*
     constructor(
         private val api: SaavnApi,
         private val dao: LibraryDao,
+        private val settingsRepository: SettingsRepository,
     ) {
+        // Settings are re-exposed through the repository so features can
+        // depend on :core:data alone (Now in Android settings pattern).
+        val settings: Flow<AppSettings> = settingsRepository.settings
+
+        suspend fun updateSettings(transform: (AppSettings) -> AppSettings) = settingsRepository.update(transform)
+
         suspend fun searchAll(q: String) = api.searchAll(q).data ?: GlobalSearchDto()
 
         suspend fun searchSongs(q: String) =
@@ -70,16 +81,24 @@ import javax.inject.*
 
         suspend fun artist(id: String) = api.artistById(id).data?.toDomain() ?: throw IllegalStateException("Artist not found")
 
-        // Local library (no accounts - everything on-device)
-        val favorites = dao.favorites()
-        val downloads = dao.downloads()
-        val history = dao.history()
-        val recentSearches = dao.recentSearches()
-        val localPlaylists = dao.playlists()
+        // Local library (no accounts - everything on-device). Flows are
+        // exposed as domain models so feature modules never see Room
+        // entities (Now in Android rule: repositories speak domain types).
+        val favorites: Flow<List<Song>> =
+            dao.favorites().map { list -> list.map { it.toSong() } }
+        val downloads: Flow<List<DownloadInfo>> =
+            dao.downloads().map { list -> list.map { it.toDownloadInfo() } }
+        val history: Flow<List<Song>> =
+            dao.history().map { list -> list.map { it.toSong() } }
+        val recentSearches: Flow<List<String>> =
+            dao.recentSearches().map { list -> list.map { it.query } }
+        val localPlaylists: Flow<List<LocalPlaylist>> =
+            dao.playlists().map { list -> list.map { LocalPlaylist(it.id, it.name) } }
 
         fun isFavorite(id: String) = dao.isFavorite(id)
 
-        fun playlistSongs(id: Long) = dao.playlistSongs(id)
+        fun playlistSongs(id: Long): Flow<List<Song>> =
+            dao.playlistSongs(id).map { list -> list.map { it.toSong() } }
 
         suspend fun toggleFavorite(
             s: Song,
@@ -175,3 +194,14 @@ fun ArtistDetailDto.toDomain(): Artist =
         },
         topAlbums.map { it.toDomain() },
     )
+
+// Entity -> domain mappers. Snapshots stored in Room carry a single
+// stream URL (no quality ladder); playback falls back to it.
+fun FavoriteEntity.toSong(): Song = Song(songId, name, artist, album, imageUrl, durationSec, streamUrl)
+
+fun HistoryEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, null, streamUrl)
+
+fun LocalPlaylistSongEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, null, streamUrl)
+
+fun DownloadEntity.toDownloadInfo(): DownloadInfo =
+    DownloadInfo(songId, name, artist, album, imageUrl, filePath, quality, sizeBytes, status, progress)

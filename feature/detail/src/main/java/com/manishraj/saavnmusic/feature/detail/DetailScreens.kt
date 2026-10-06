@@ -1,0 +1,153 @@
+package com.manishraj.saavnmusic.feature.detail
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.domain.UiState
+import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.ErrorState
+import com.manishraj.saavnmusic.ui.components.GradientHeader
+import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.SectionHeader
+import com.manishraj.saavnmusic.ui.components.ShimmerList
+import com.manishraj.saavnmusic.ui.components.SongRow
+
+@Composable
+fun AlbumScreen(
+    id: String,
+    vm: DetailViewModel = hiltViewModel(),
+    onPlayQueue: (List<Song>, Int) -> Unit,
+) {
+    LaunchedEffect(id) { vm.loadAlbum(id) }
+    val s by vm.album.collectAsState()
+    DetailList(
+        s,
+        { it.songs },
+        { a -> SongListHeader(a.name, a.artist, a.imageUrl, a.description) },
+        onPlayQueue,
+    ) { vm.loadAlbum(id) }
+}
+
+@Composable
+fun PlaylistScreen(
+    id: String,
+    vm: DetailViewModel = hiltViewModel(),
+    onPlayQueue: (List<Song>, Int) -> Unit,
+) {
+    LaunchedEffect(id) { vm.loadPlaylist(id) }
+    val s by vm.playlist.collectAsState()
+    DetailList(
+        s,
+        { it.songs },
+        { p -> SongListHeader(p.name, "Playlist", p.imageUrl, p.description) },
+        onPlayQueue,
+    ) { vm.loadPlaylist(id) }
+}
+
+@Composable
+fun <T> DetailList(
+    state: UiState<T>,
+    songs: (T) -> List<Song>,
+    header: @Composable (T) -> Unit,
+    play: (List<Song>, Int) -> Unit,
+    retry: () -> Unit,
+) {
+    when (state) {
+        is UiState.Loading -> ShimmerList()
+        is UiState.Error -> ErrorState(state.message, retry)
+        is UiState.Success -> {
+            val list = songs(state.data)
+            LazyColumn {
+                item { header(state.data) }
+                item {
+                    Row(Modifier.padding(16.dp)) {
+                        Button(onClick = { play(list, 0) }) {
+                            Icon(Icons.Default.PlayArrow, null)
+                            Text(" Play all")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(onClick = { play(list.shuffled(), 0) }) { Text("Shuffle") }
+                    }
+                }
+                items(list) { song -> SongRow(song, { play(list, list.indexOf(song)) }) }
+            }
+        }
+    }
+}
+
+@Composable
+fun SongListHeader(
+    title: String,
+    subtitle: String,
+    image: String?,
+    desc: String?,
+) {
+    GradientHeader(image) {
+        Column(Modifier.padding(16.dp)) {
+            Artwork(image, 180, 16)
+            Spacer(Modifier.height(12.dp))
+            Text(title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
+            if (!desc.isNullOrBlank()) {
+                Text(
+                    desc,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ArtistScreen(
+    id: String,
+    vm: DetailViewModel = hiltViewModel(),
+    onAlbum: (String) -> Unit,
+    onPlayQueue: (List<Song>, Int) -> Unit,
+) {
+    LaunchedEffect(id) { vm.loadArtist(id) }
+    val s by vm.artist.collectAsState()
+    when (val a = s) {
+        is UiState.Loading -> ShimmerList()
+        is UiState.Error -> ErrorState(a.message) { vm.loadArtist(id) }
+        is UiState.Success ->
+            LazyColumn {
+                item {
+                    SongListHeader(
+                        a.data.name,
+                        listOfNotNull(a.data.followers?.let { "$it followers" }).joinToString(),
+                        a.data.imageUrl,
+                        a.data.bio,
+                    )
+                }
+                item { SectionHeader("Top songs") }
+                items(a.data.topSongs) { song -> SongRow(song, { onPlayQueue(a.data.topSongs, a.data.topSongs.indexOf(song)) }) }
+                item { SectionHeader("Top albums") }
+                item { LazyRow { items(a.data.topAlbums) { al -> MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) } } } }
+            }
+    }
+}

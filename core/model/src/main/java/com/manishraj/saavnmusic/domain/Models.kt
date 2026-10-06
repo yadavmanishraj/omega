@@ -44,6 +44,27 @@ data class Artist(
     val topAlbums: List<Album> = emptyList(),
 )
 
+/** A downloaded track as the UI needs it (mirrors the Room row, without exposing the entity). */
+data class DownloadInfo(
+    val songId: String,
+    val name: String,
+    val artist: String,
+    val album: String?,
+    val imageUrl: String?,
+    val filePath: String,
+    val quality: String,
+    val sizeBytes: Long = 0,
+    val status: String = "COMPLETED",
+    val progress: Int = 100,
+)
+
+/** A user-created, on-device playlist (no accounts — Room only). */
+data class LocalPlaylist(
+    val id: Long,
+    val name: String,
+    val songCount: Int = 0,
+)
+
 fun formatDuration(sec: Long?): String {
     if (sec == null) return ""
     return "%d:%02d".format(sec / 60, sec % 60)
