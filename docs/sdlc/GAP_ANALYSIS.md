@@ -28,10 +28,14 @@
 > - **SearchBar:** the redesign assumed `SearchBarInputField`; it does
 >   not exist in material3 1.3.1, so Search uses the deprecated
 >   `SearchBar(query, active, ...)` overload (suppressed, documented).
-> - **Downloads:** deleting a download now removes the file too, and
->   the Library renders progress/Retry states — but the worker still
->   only writes a Room row on success, so in-progress/FAILED rows are
->   not produced yet. Still open.
+> - **Downloads:** **[CLOSED 2026-10-07, wave 2]** the worker writes the
+>   full lifecycle to Room (DOWNLOADING + throttled progress, FAILED,
+>   cancel cleanup), completed rows are playable, delete removes the
+>   file + metadata sidecar and cancels in-flight work. FAILED rows
+>   carry a human-readable `errorMessage` — the one deliberate schema
+>   change since v1: Room 1 -> 2 via `MIGRATION_1_2` (additive
+>   `ALTER TABLE ... ADD COLUMN`, all v1 data preserved; the upgrade
+>   path is covered by the on-device QA checklist).
 > - **Local playlists:** detail view + playback now exist; rename and
 >   reorder are still missing. Still open. **[Add-to-playlist UI entry
 >   point added on `feat/add-to-playlist`: song overflow menus in Home,

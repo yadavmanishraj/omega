@@ -77,7 +77,7 @@ class DownloadWorker
                         if (fallback != null) {
                             val file = File(musicDir(), downloadFileName(fallback))
                             repo.markDownloadStarted(fallback, file.absolutePath, quality)
-                            repo.markDownloadFailed(id)
+                            repo.markDownloadFailed(id, "Couldn't load this song's details")
                         }
                         return Result.failure()
                     }
@@ -90,13 +90,15 @@ class DownloadWorker
                 if (url == null) {
                     // No stream for this song at any quality: a
                     // first-class FAILED row, not an endless retry.
-                    repo.markDownloadFailed(id)
+                    repo.markDownloadFailed(id, "No stream available for this song")
                     return Result.failure()
                 }
+                var httpFailure: String? = null
                 val completed =
                     http.newCall(Request.Builder().url(url).build()).execute().use { response ->
                         val body = response.body
                         if (!response.isSuccessful || body == null) {
+                            httpFailure = "HTTP ${response.code}"
                             false
                         } else {
                             copyWithProgress(body.contentLength(), body.byteStream(), file, id)
@@ -105,7 +107,7 @@ class DownloadWorker
                     }
                 if (!completed) {
                     runCatching { file.delete() }
-                    repo.markDownloadFailed(id)
+                    repo.markDownloadFailed(id, httpFailure ?: "Download failed")
                     return Result.failure()
                 }
                 currentCoroutineContext().ensureActive()
@@ -121,7 +123,7 @@ class DownloadWorker
             } catch (e: Exception) {
                 targetFile?.let { partial -> runCatching { partial.delete() } }
                 if (targetFile != null) {
-                    runCatching { repo.markDownloadFailed(id) }
+                    runCatching { repo.markDownloadFailed(id, e.message ?: "Download failed") }
                 }
                 Result.failure()
             }

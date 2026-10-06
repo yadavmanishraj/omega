@@ -337,6 +337,13 @@ fun LibraryScreen(
                                                     style = MaterialTheme.typography.bodyMedium,
                                                 )
                                                 if (d.status == "FAILED") {
+                                                    if (!d.errorMessage.isNullOrBlank()) {
+                                                        Text(
+                                                            d.errorMessage,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.error,
+                                                        )
+                                                    }
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                         Icon(
                                                             Icons.Outlined.ErrorOutline,

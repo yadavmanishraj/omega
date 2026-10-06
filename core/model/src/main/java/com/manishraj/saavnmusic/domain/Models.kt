@@ -73,6 +73,7 @@ data class DownloadInfo(
     val sizeBytes: Long = 0,
     val status: String = "COMPLETED",
     val progress: Int = 100,
+    val errorMessage: String? = null,
 )
 
 /** A user-created, on-device playlist (no accounts — Room only). */

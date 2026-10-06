@@ -1,5 +1,7 @@
 package com.manishraj.saavnmusic.data.local
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Entity(tableName = "favorites")
 data class FavoriteEntity(
@@ -26,6 +28,9 @@ data class DownloadEntity(
     val status: String = "COMPLETED",
     val progress: Int = 100,
     val addedAt: Long = System.currentTimeMillis(),
+    // Added in schema v2 (kept last: the 1->2 migration appends the
+    // column with ALTER TABLE ... ADD COLUMN, matching this position).
+    val errorMessage: String? = null,
 )
 
 @Entity(tableName = "history")
@@ -104,6 +109,12 @@ data class LocalPlaylistRow(
         status: String,
     )
 
+    @Query("UPDATE downloads SET status = 'FAILED', errorMessage = :message WHERE songId = :id")
+    suspend fun updateDownloadFailed(
+        id: String,
+        message: String?,
+    )
+
     @Query("DELETE FROM downloads WHERE songId=:id")
     suspend fun deleteDownload(id: String)
 
@@ -159,9 +170,21 @@ data class LocalPlaylistRow(
         LocalPlaylistEntity::class,
         LocalPlaylistSongEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 }
+
+/**
+ * Schema 1 -> 2: downloads gain a nullable `errorMessage` so a FAILED
+ * row can say why (HTTP code, no stream, IO error). Purely additive —
+ * every v1 row and table survives untouched.
+ */
+val MIGRATION_1_2 =
+    object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN errorMessage TEXT")
+        }
+    }

@@ -406,7 +406,10 @@ class MusicRepository
          * this status. (The downloads table has no error-message column;
          * the status alone is the persisted failure signal.)
          */
-        suspend fun markDownloadFailed(id: String) = dao.updateDownloadStatus(id, "FAILED")
+        suspend fun markDownloadFailed(
+            id: String,
+            message: String?,
+        ) = dao.updateDownloadFailed(id, message)
 
         /** Removes a download row outright (the worker's cancellation cleanup). */
         suspend fun removeDownloadRow(id: String) = dao.deleteDownload(id)
@@ -458,7 +461,7 @@ fun HistoryEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, nu
 fun LocalPlaylistSongEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, null, streamUrl)
 
 fun DownloadEntity.toDownloadInfo(): DownloadInfo =
-    DownloadInfo(songId, name, artist, album, imageUrl, filePath, quality, sizeBytes, status, progress)
+    DownloadInfo(songId, name, artist, album, imageUrl, filePath, quality, sizeBytes, status, progress, errorMessage)
 
 /**
  * A completed download as a playable [Song]: the local file path rides
