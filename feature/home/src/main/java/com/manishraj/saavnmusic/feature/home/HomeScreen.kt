@@ -206,7 +206,7 @@ fun HomeScreen(
                         }
                         is UiState.Error -> {
                             item { SectionHeader("Trending songs") }
-                            item { ErrorState(s.message) { vm.load() } }
+                            item { ErrorState(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
@@ -224,7 +224,7 @@ fun HomeScreen(
                         }
                         is UiState.Error -> {
                             item { SectionHeader("New albums") }
-                            item { ErrorState(s.message) { vm.load() } }
+                            item { ErrorState(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
@@ -246,7 +246,7 @@ fun HomeScreen(
                         }
                         is UiState.Error -> {
                             item { SectionHeader("Playlists for you") }
-                            item { ErrorState(s.message) { vm.load() } }
+                            item { ErrorState(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
@@ -268,7 +268,7 @@ fun HomeScreen(
                         }
                         is UiState.Error -> {
                             item { SectionHeader("Artists") }
-                            item { ErrorState(s.message) { vm.load() } }
+                            item { ErrorState(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {

@@ -134,7 +134,7 @@ fun ArtistScreen(
     val s by vm.artist.collectAsState()
     when (val a = s) {
         is UiState.Loading -> ShimmerList()
-        is UiState.Error -> ErrorState(a.message) { vm.loadArtist(id) }
+        is UiState.Error -> ErrorState(a.message, onRetry = { vm.loadArtist(id) })
         is UiState.Success ->
             LazyColumn {
                 item {

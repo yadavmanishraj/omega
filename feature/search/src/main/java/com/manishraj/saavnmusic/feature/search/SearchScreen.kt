@@ -219,7 +219,7 @@ fun SearchScreen(
             0 ->
                 when (val s = songs) {
                     is UiState.Loading -> ShimmerList()
-                    is UiState.Error -> ErrorState(s.message) { vm.search(searchedQuery) }
+                    is UiState.Error -> ErrorState(s.message, onRetry = { vm.search(searchedQuery) })
                     is UiState.Success ->
                         LazyColumn {
                             if (topResults.isNotEmpty()) {
