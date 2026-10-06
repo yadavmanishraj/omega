@@ -200,18 +200,24 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
     }
 }
 
-@Composable fun QualityChips(
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun QualityChips(
     selected: String,
     onSelect: (String) -> Unit,
 ) {
-    Row {
+    // FlowRow, not Row: with a large system font size the four chips do
+    // not fit on one line and a plain Row crushes the last chip to
+    // zero width (its label renders one character per line).
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         listOf("48kbps", "96kbps", "160kbps", "320kbps").forEach { q ->
             FilterChip(
-                selected =
-                    selected == q,
+                selected = selected == q,
                 onClick = { onSelect(q) },
-                label = { Text(q) },
-                modifier = Modifier.padding(end = 6.dp),
+                label = { Text(q, maxLines = 1, softWrap = false) },
             )
         }
     }

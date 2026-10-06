@@ -113,7 +113,11 @@ fun SearchScreen(
                 Tab(selected = tab == i, onClick = {
                     vm.tab.value =
                         i
-                }, text = { Text(t) })
+                }, text = {
+                    // Never let a tab label wrap ("Album\ns" at large
+                    // font sizes); single line, ellipsis if needed.
+                    Text(t, maxLines = 1, softWrap = false)
+                })
             }
         }
         when (tab) {

@@ -188,15 +188,19 @@ fun FullPlayer(
             }) { Icon(Icons.Default.Bedtime, null) }
             Text("${if (sleep == 0) "" else sleep.toString()}", Modifier.align(Alignment.CenterVertically))
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Speed", style = MaterialTheme.typography.bodySmall)
+        Text("Speed", style = MaterialTheme.typography.bodySmall)
+        // FlowRow so the chips wrap instead of overflowing on narrow
+        // screens / large font sizes (same bug as the settings chips).
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             listOf(0.75f, 1f, 1.25f, 1.5f).forEach { v ->
                 FilterChip(
-                    selected =
-                        st.speed == v,
+                    selected = st.speed == v,
                     onClick = { vm.player.setSpeed(v) },
-                    label = { Text("${v}x") },
-                    modifier = Modifier.padding(start = 6.dp),
+                    label = { Text("${v}x", maxLines = 1, softWrap = false) },
                 )
             }
         }
