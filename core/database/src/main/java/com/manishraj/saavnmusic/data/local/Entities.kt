@@ -130,6 +130,9 @@ data class LocalPlaylistRow(
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addToPlaylist(e: LocalPlaylistSongEntity)
 
+    @Query("SELECT COUNT(*) FROM local_playlist_songs WHERE playlistId=:id")
+    suspend fun playlistSongCount(id: Long): Int
+
     @Query("SELECT * FROM local_playlist_songs WHERE playlistId=:id ORDER BY position")
     fun playlistSongs(id: Long): kotlinx.coroutines.flow.Flow<List<LocalPlaylistSongEntity>>
 }
