@@ -120,7 +120,7 @@ data class LocalPlaylistSongEntity(
 @Database(
     entities = [FavoriteEntity::class, DownloadEntity::class, HistoryEntity::class, RecentSearchEntity::class, LocalPlaylistEntity::class, LocalPlaylistSongEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao

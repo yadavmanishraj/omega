@@ -1,9 +1,7 @@
 package com.manishraj.saavnmusic.di
 import android.content.Context
-import androidx.room.Room
 import androidx.work.WorkManager
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import com.manishraj.saavnmusic.data.local.*
 import com.manishraj.saavnmusic.data.remote.SaavnApi
 import com.manishraj.saavnmusic.data.settings.SettingsRepository
 import dagger.*
@@ -38,13 +36,6 @@ object AppModule {
             .build()
             .create(SaavnApi::class.java)
     }
-
-    @Provides @Singleton
-    fun db(
-        @ApplicationContext c: Context,
-    ): AppDatabase = Room.databaseBuilder(c, AppDatabase::class.java, "saavn-music.db").build()
-
-    @Provides fun dao(db: AppDatabase) = db.libraryDao()
 
     @Provides @Singleton
     fun workManager(

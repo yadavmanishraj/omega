@@ -51,6 +51,7 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
     implementation(projects.core.network)
+    implementation(projects.core.database)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
