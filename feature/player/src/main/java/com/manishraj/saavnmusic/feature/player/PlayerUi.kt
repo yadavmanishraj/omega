@@ -285,7 +285,7 @@ fun FullPlayer(
                 )
             }
             IconButton(onClick = {
-                DownloadWorker.enqueue(WorkManager.getInstance(ctx), cur.id, vm.appSettings.value.downloadQuality)
+                DownloadWorker.enqueue(WorkManager.getInstance(ctx), cur, vm.appSettings.value.downloadQuality)
             }) {
                 Icon(Icons.Filled.Download, contentDescription = "Download")
             }

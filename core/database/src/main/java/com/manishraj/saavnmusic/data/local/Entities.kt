@@ -91,6 +91,19 @@ data class LocalPlaylistRow(
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDownload(e: DownloadEntity)
 
+    @Query("UPDATE downloads SET progress = :progress, sizeBytes = :sizeBytes WHERE songId = :id")
+    suspend fun updateDownloadProgress(
+        id: String,
+        progress: Int,
+        sizeBytes: Long,
+    )
+
+    @Query("UPDATE downloads SET status = :status WHERE songId = :id")
+    suspend fun updateDownloadStatus(
+        id: String,
+        status: String,
+    )
+
     @Query("DELETE FROM downloads WHERE songId=:id")
     suspend fun deleteDownload(id: String)
 

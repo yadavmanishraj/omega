@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.manishraj.saavnmusic.data.repository.toSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
 import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
@@ -284,6 +285,21 @@ fun LibraryScreen(
                             LazyColumn {
                                 items(ordered) { d ->
                                     ListItem(
+                                        modifier =
+                                            if (d.status == "COMPLETED") {
+                                                Modifier.clickable {
+                                                    // Play the downloaded files as a queue
+                                                    // starting at the tapped track — the
+                                                    // local files play fully offline.
+                                                    val playable = ordered.filter { it.status == "COMPLETED" }
+                                                    onPlayQueue(
+                                                        playable.map { it.toSong() },
+                                                        playable.indexOf(d),
+                                                    )
+                                                }
+                                            } else {
+                                                Modifier
+                                            },
                                         headlineContent = {
                                             Text(d.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
                                         },

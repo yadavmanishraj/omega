@@ -54,6 +54,12 @@ class LibraryViewModel
         }
 
         fun deleteDownload(info: DownloadInfo) {
+            // Cancel any in-flight transfer first: the worker's
+            // cancellation cleanup removes its partial file and row,
+            // and repo.deleteDownload removes row + file + sidecar —
+            // without the cancel, a running worker could re-register
+            // the download after the delete.
+            WorkManager.getInstance(context).cancelUniqueWork(DownloadWorker.uniqueWorkName(info.songId))
             viewModelScope.launch { repo.deleteDownload(info.songId) }
         }
 
@@ -62,7 +68,7 @@ class LibraryViewModel
             viewModelScope.launch {
                 val song = runCatching { repo.song(info.songId) }.getOrNull() ?: return@launch
                 val quality = repo.settings.first().downloadQuality
-                DownloadWorker.enqueue(WorkManager.getInstance(context), song.id, quality)
+                DownloadWorker.enqueue(WorkManager.getInstance(context), song, quality)
             }
         }
 

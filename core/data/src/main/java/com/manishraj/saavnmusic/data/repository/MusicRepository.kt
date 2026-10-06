@@ -34,6 +34,7 @@ import com.manishraj.saavnmusic.domain.HomeContent
 import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Playlist
 import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.domain.sanitizeFileName
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -353,6 +354,49 @@ class MusicRepository
             size: Long,
         ) = dao.upsertDownload(DownloadEntity(s.id, s.name, s.artist, s.album, s.imageUrl, path, quality, size))
 
+        /**
+         * Marks a download as started (written by the download worker on
+         * entry): the row exists from the moment the transfer begins, so
+         * Library renders the DOWNLOADING state and live progress instead
+         * of the download only appearing once it completes. Re-running a
+         * download resets its progress to zero.
+         */
+        suspend fun markDownloadStarted(
+            s: Song,
+            path: String,
+            quality: String,
+        ) = dao.upsertDownload(
+            DownloadEntity(
+                s.id,
+                s.name,
+                s.artist,
+                s.album,
+                s.imageUrl,
+                path,
+                quality,
+                0,
+                "DOWNLOADING",
+                0,
+            ),
+        )
+
+        /** Throttled progress write from the download worker (percent complete + bytes so far). */
+        suspend fun updateDownloadProgress(
+            id: String,
+            progress: Int,
+            sizeBytes: Long,
+        ) = dao.updateDownloadProgress(id, progress, sizeBytes)
+
+        /**
+         * Terminal failure write: Library renders FAILED + Retry from
+         * this status. (The downloads table has no error-message column;
+         * the status alone is the persisted failure signal.)
+         */
+        suspend fun markDownloadFailed(id: String) = dao.updateDownloadStatus(id, "FAILED")
+
+        /** Removes a download row outright (the worker's cancellation cleanup). */
+        suspend fun removeDownloadRow(id: String) = dao.deleteDownload(id)
+
         /** Re-registers a download row (used by the Library Undo action after a delete). */
         suspend fun registerDownload(info: DownloadInfo) =
             dao.upsertDownload(
@@ -375,7 +419,14 @@ class MusicRepository
             val row = dao.download(id)
             dao.deleteDownload(id)
             if (row != null) {
-                runCatching { java.io.File(row.filePath).delete() }
+                val audioFile = java.io.File(row.filePath)
+                runCatching { audioFile.delete() }
+                // The worker's metadata sidecar (<Name>.json next to the
+                // audio file) goes with it, so no orphan files pile up.
+                val dir = audioFile.parentFile
+                if (dir != null) {
+                    runCatching { java.io.File(dir, sanitizeFileName(row.name) + ".json").delete() }
+                }
             }
         }
 
@@ -394,3 +445,11 @@ fun LocalPlaylistSongEntity.toSong(): Song = Song(songId, name, artist, null, im
 
 fun DownloadEntity.toDownloadInfo(): DownloadInfo =
     DownloadInfo(songId, name, artist, album, imageUrl, filePath, quality, sizeBytes, status, progress)
+
+/**
+ * A completed download as a playable [Song]: the local file path rides
+ * in `streamUrl` (PlayerController hands it to Media3, which plays
+ * local files), so downloaded tracks play exactly like streamed ones —
+ * fully offline.
+ */
+fun DownloadInfo.toSong(): Song = Song(songId, name, artist, album, imageUrl, null, filePath)
