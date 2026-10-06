@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Righteous (display family), bundled under the SIL Open Font License 1.1.
+  License text: ofl_righteous.txt in this same directory.
+  Source: google/fonts repo, ofl/righteous.
+  Righteous ships a single weight (400).
+-->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="400"
+        android:font="@font/righteous_regular" />
+</font-family>

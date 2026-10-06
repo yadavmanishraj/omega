@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,18 +24,26 @@ import androidx.compose.ui.unit.sp
  * here. Play-green is the constant brand accent; the midnight/indigo
  * base lets artwork carry the color.
  *
- * Font families per spec §2.2: Righteous (display) + Poppins (body) via
- * the Google Fonts downloadable provider.
- *
- * DEVIATION (documented in GAP_ANALYSIS): the downloadable provider
- * needs the GMS fonts certs resource array, which cannot be validated
- * without a device build, so the families currently resolve to the
- * platform default. The full type SCALE (sizes/weights/leading) below
- * is implemented exactly as specified, and wiring the provider later is
- * a two-line change confined to this file.
+ * Font families per spec §2.2: Righteous (display) + Poppins (body),
+ * BUNDLED as static TTFs in this module's res/font - no downloadable
+ * provider, no GMS cert arrays, no runtime font download, so text is
+ * correct on first frame on every device. Both fonts are SIL Open
+ * Font License 1.1; the license texts ship alongside the TTFs
+ * (res/font/ofl_poppins.txt, res/font/ofl_righteous.txt). The type
+ * SCALE (sizes/weights/leading) below is spec §2.2 exactly.
  */
-val DisplayFontFamily: FontFamily = FontFamily.Default
-val BodyFontFamily: FontFamily = FontFamily.Default
+val DisplayFontFamily: FontFamily =
+    FontFamily(
+        Font(R.font.righteous_regular, FontWeight.Normal),
+    )
+
+val BodyFontFamily: FontFamily =
+    FontFamily(
+        Font(R.font.poppins_regular, FontWeight.Normal),
+        Font(R.font.poppins_medium, FontWeight.Medium),
+        Font(R.font.poppins_semibold, FontWeight.SemiBold),
+        Font(R.font.poppins_bold, FontWeight.Bold),
+    )
 
 /** 4dp-base spacing scale (spec §2.3). */
 object OmegaSpacing {
