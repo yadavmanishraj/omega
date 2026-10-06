@@ -222,6 +222,6 @@ import javax.inject.Inject
         val state = settings.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
         fun update(t: (AppSettings) -> AppSettings) {
-            viewModelScope.launch { settings.update(t, state.value) }
+            viewModelScope.launch { settings.update(t) }
         }
     }
