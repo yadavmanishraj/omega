@@ -37,11 +37,14 @@ class HomeViewModel
             viewModelScope.launch {
                 trending.value = UiState.Loading
                 try {
-                    // Home = global search carousels for evergreen terms (the API has no public trending/home endpoint in the current controller set - see STUDY.md)
-                    trending.value = UiState.Success(repo.searchSongs("trending bollywood"))
-                    albums.value = repo.searchAlbums("latest albums")
-                    playlists.value = repo.searchPlaylists("top playlists")
-                    artists.value = repo.searchArtists("top singers")
+                    // Home is fed by the upstream browse-modules payload
+                    // (content.getBrowseModules), classified by shape in
+                    // the network mappers - see UPSTREAM_VALIDATION §4.
+                    val home = repo.home()
+                    trending.value = UiState.Success(home.trendingSongs)
+                    albums.value = home.albums
+                    playlists.value = home.playlists
+                    artists.value = home.artists
                 } catch (e: Exception) {
                     trending.value = UiState.Error(e.message ?: "Network error")
                 }

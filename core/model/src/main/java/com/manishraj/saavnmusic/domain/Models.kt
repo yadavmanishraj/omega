@@ -44,6 +44,23 @@ data class Artist(
     val topAlbums: List<Album> = emptyList(),
 )
 
+/** Home feed sections, assembled from the upstream browse-modules payload (already classified by shape). */
+data class HomeContent(
+    val trendingSongs: List<Song> = emptyList(),
+    val albums: List<Album> = emptyList(),
+    val playlists: List<Playlist> = emptyList(),
+    val artists: List<Artist> = emptyList(),
+)
+
+/** Global search (autocomplete) results: lightweight items; songs here are NOT playable until resolved by id. */
+data class GlobalSearch(
+    val topSongs: List<Song> = emptyList(),
+    val songs: List<Song> = emptyList(),
+    val albums: List<Album> = emptyList(),
+    val artists: List<Artist> = emptyList(),
+    val playlists: List<Playlist> = emptyList(),
+)
+
 /** A downloaded track as the UI needs it (mirrors the Room row, without exposing the entity). */
 data class DownloadInfo(
     val songId: String,

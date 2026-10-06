@@ -14,9 +14,8 @@ dependencies {
     api(projects.core.database)
     api(projects.core.datastore)
 
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.serialization)
     implementation(libs.kotlinx.coroutines)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

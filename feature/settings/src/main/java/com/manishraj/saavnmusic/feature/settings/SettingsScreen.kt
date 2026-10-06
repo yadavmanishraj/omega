@@ -30,7 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
     val s by vm.state.collectAsState()
-    var base by remember(s.baseUrl) { mutableStateOf(s.baseUrl) }
+    var base by remember(s.apiEndpoint) { mutableStateOf(s.apiEndpoint) }
     LazyColumn(Modifier.padding(16.dp)) {
         item {
             Text("Settings", style = MaterialTheme.typography.headlineMedium)
@@ -38,13 +38,13 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
             OutlinedTextField(
                 base,
                 { base = it },
-                label = { Text("API base URL") },
+                label = { Text("API endpoint") },
                 modifier = Modifier.fillMaxWidth(),
                 supportingText = {
-                    Text("Default: https://saavn.dev/api/ - restart the app after changing")
+                    Text("Default: https://www.jiosaavn.com/api.php - restart the app after changing")
                 },
             )
-            Button(onClick = { vm.update { it.copy(baseUrl = base) } }) { Text("Save API URL") }
+            Button(onClick = { vm.update { it.copy(apiEndpoint = base) } }) { Text("Save API endpoint") }
             Spacer(Modifier.height(16.dp))
             Text("Playback quality")
             QualityChips(s.streamQuality) { q -> vm.update { it.copy(streamQuality = q) } }

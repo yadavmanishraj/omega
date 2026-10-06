@@ -78,6 +78,9 @@ data class LocalPlaylistSongEntity(
     @Query("SELECT * FROM downloads ORDER BY addedAt DESC")
     fun downloads(): kotlinx.coroutines.flow.Flow<List<DownloadEntity>>
 
+    @Query("SELECT * FROM downloads WHERE songId=:id")
+    suspend fun download(id: String): DownloadEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDownload(e: DownloadEntity)
 
@@ -98,6 +101,9 @@ data class LocalPlaylistSongEntity(
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addRecentSearch(e: RecentSearchEntity)
+
+    @Query("DELETE FROM recent_searches WHERE query=:q")
+    suspend fun removeRecentSearch(q: String)
 
     @Query("DELETE FROM recent_searches")
     suspend fun clearRecentSearches()

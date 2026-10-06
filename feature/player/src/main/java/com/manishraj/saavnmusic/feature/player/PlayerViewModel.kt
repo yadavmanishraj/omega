@@ -46,7 +46,7 @@ class PlayerViewModel
             id: String,
             onResult: (String?) -> Unit,
         ) {
-            viewModelScope.launch { onResult(repo.songWithLyrics(id)?.lyrics?.lyrics) }
+            viewModelScope.launch { onResult(repo.lyrics(id)) }
         }
 
         fun suggestions(id: String) {
