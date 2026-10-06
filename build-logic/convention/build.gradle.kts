@@ -30,10 +30,11 @@ dependencies {
 gradlePlugin {
     plugins {
         register("androidLibrary") {
-            id =
-                libs.plugins.omega.android.library
-                    .get()
-                    .pluginId
+            // Literal id: the type-safe accessor for `omega.android.library`
+            // cannot be used here because the same name is also the prefix
+            // group of `omega.android.library.compose`, so the generated
+            // accessor is a group type with no Provider.get() to call.
+            id = "omega.android.library"
             implementationClass = "AndroidLibraryConventionPlugin"
         }
         register("androidLibraryCompose") {
@@ -44,10 +45,10 @@ gradlePlugin {
             implementationClass = "AndroidLibraryComposeConventionPlugin"
         }
         register("androidApplication") {
-            id =
-                libs.plugins.omega.android.application
-                    .get()
-                    .pluginId
+            // Literal id for the same reason as androidLibrary above:
+            // `omega.android.application` is also the prefix group of
+            // `omega.android.application.compose`.
+            id = "omega.android.application"
             implementationClass = "AndroidApplicationConventionPlugin"
         }
         register("androidApplicationCompose") {
