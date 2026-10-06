@@ -75,14 +75,22 @@ fun SearchScreen(
     val recent by vm.recent.collectAsState()
     val tab by vm.tab.collectAsState()
     Column(Modifier.fillMaxSize()) {
-        SearchBar(query = text, onQueryChange = {
-            text = it
-        }, onSearch = {
-            vm.search(text)
-        }, active = false, onActiveChange = {
-        }, placeholder = {
-            Text("Songs, albums, artists…")
-        }, leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.fillMaxWidth().padding(12.dp)) {}
+        SearchBar(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            inputField = {
+                SearchBarInputField(
+                    query = text,
+                    onQueryChange = { text = it },
+                    onSearch = { vm.search(text) },
+                    expanded = false,
+                    onExpandedChange = {},
+                    placeholder = { Text("Songs, albums, artists…") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                )
+            },
+            expanded = false,
+            onExpandedChange = {},
+        ) {}
         if (recent.isNotEmpty() &&
             songs is UiState.Success &&
             (songs as UiState.Success<List<Song>>).data.isEmpty()

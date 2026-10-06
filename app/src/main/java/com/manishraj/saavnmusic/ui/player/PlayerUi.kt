@@ -72,7 +72,7 @@ fun FullPlayer(
             IconButton(onClick = {
                 showQueue =
                     true
-            }) { Icon(Icons.Default.QueueMusic, null) }
+            }) { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) }
         }
         Artwork(cur.imageUrl, 300, 20)
         Spacer(Modifier.height(20.dp))
