@@ -1,0 +1,3 @@
+-keepattributes *Annotation*
+-keep class com.manishraj.saavnmusic.data.remote.dto.** { *; }
+-dontwarn okhttp3.**
