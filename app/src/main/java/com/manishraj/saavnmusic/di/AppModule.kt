@@ -15,34 +15,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
-import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    @Provides @Singleton
-    fun json(): Json =
-        Json {
-            ignoreUnknownKeys = true
-            coerceInputValues = true
-        }
-
-    @Provides @Singleton
-    fun okHttp(): OkHttpClient =
-        OkHttpClient
-            .Builder()
-            .addInterceptor(
-                HttpLoggingInterceptor().apply {
-                    level =
-                        HttpLoggingInterceptor.Level.BASIC
-                },
-            ).connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-
     /** Base URL is user-configurable in Settings (DataStore); read once at graph creation, restart applies changes - documented in README. */
     @Provides @Singleton
     fun api(
