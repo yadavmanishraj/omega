@@ -3,7 +3,17 @@ import android.content.ComponentName; import android.content.Context
 import androidx.media3.common.*; import androidx.media3.session.MediaController; import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors; import com.manishraj.saavnmusic.domain.Song
 import dagger.hilt.android.qualifiers.ApplicationContext; import kotlinx.coroutines.*; import kotlinx.coroutines.flow.*; import javax.inject.*
-data class PlayerState(val current:Song?=null,val queue:List<Song>=emptyList(),val isPlaying:Boolean=false,val isBuffering:Boolean=false,val positionMs:Long=0,val durationMs:Long=0,val shuffle:Boolean=false,val repeatMode:Int=Player.REPEAT_MODE_OFF,val speed:Float=1f)
+data class PlayerState(
+    val current: Song? = null,
+    val queue: List<Song> = emptyList(),
+    val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    val shuffle: Boolean = false,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val speed: Float = 1f
+)
 @Singleton class PlayerController @Inject constructor(@ApplicationContext private val ctx:Context){
     private var controller: MediaController? = null
     private val _state = MutableStateFlow(PlayerState()); val state: StateFlow<PlayerState> = _state
