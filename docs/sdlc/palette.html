@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Omega Music — Design Tokens</title>
+<style>
+:root{--bg:#0B0F0E;--surface:#121715;--surface2:#1C2321;--high:#262E2B;--text:#F2F5F3;--muted:#B9C4BF;--primary:#3BE477;--onpri:#003314;--pricont:#0E3B21;--onpricont:#7BF0A2;--tertiary:#FFB86B;--outline:#3A4541;--error:#FFB4A8}
+*{box-sizing:border-box}body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--bg);color:var(--text);padding:24px;max-width:960px;margin:auto}
+h1{font-size:32px;margin:8px 0}h2{font-size:20px;margin:32px 0 12px;color:var(--onpricont)}p,td{color:var(--muted);line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.sw{border:1px solid var(--outline);border-radius:12px;overflow:hidden}.sw .chip{height:64px}.sw div:last-child{padding:8px 10px;font-size:12px;background:var(--surface)}
+.sw b{display:block;color:var(--text);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px 8px;border-bottom:1px solid var(--surface2);text-align:left}th{color:var(--text)}
+.type div{border-bottom:1px solid var(--surface2);padding:6px 0}
+.pill{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:600}
+.mini{background:var(--high);border-radius:12px;padding:10px 12px;display:flex;gap:12px;align-items:center;margin-top:12px}
+.art{width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#0E3B33,#3BE477)}
+.play{width:64px;height:64px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;font-size:28px;flex:none}
+.light{background:#F7FAF8;color:#171D1A;border-radius:16px;padding:16px;margin-top:12px}.light p{color:#4A5550}
+</style></head><body>
+<h1>Omega Music — Tokens</h1>
+<p>Dark-first Material 3 system. Full spec: <b>UIUX_DESIGN.md</b> · Play button rule: white circle / black glyph, never tinted.</p>
+
+<h2>Color — Dark (reference)</h2>
+<div class="grid">
+<div class="sw"><div class="chip" style="background:#3BE477"></div><div><b>primary</b>#3BE477</div></div>
+<div class="sw"><div class="chip" style="background:#0E3B21"></div><div><b>primaryContainer</b>#0E3B21</div></div>
+<div class="sw"><div class="chip" style="background:#A8C7C2"></div><div><b>secondary</b>#A8C7C2</div></div>
+<div class="sw"><div class="chip" style="background:#FFB86B"></div><div><b>tertiary</b>#FFB86B</div></div>
+<div class="sw"><div class="chip" style="background:#0B0F0E"></div><div><b>background</b>#0B0F0E</div></div>
+<div class="sw"><div class="chip" style="background:#121715"></div><div><b>surface</b>#121715</div></div>
+<div class="sw"><div class="chip" style="background:#1C2321"></div><div><b>surfaceVariant</b>#1C2321</div></div>
+<div class="sw"><div class="chip" style="background:#262E2B"></div><div><b>surfaceContainerHigh</b>#262E2B</div></div>
+<div class="sw"><div class="chip" style="background:#F2F5F3"></div><div><b>onSurface</b>#F2F5F3 · 15.2:1</div></div>
+<div class="sw"><div class="chip" style="background:#B9C4BF"></div><div><b>onSurfaceVariant</b>#B9C4BF · 8.9:1</div></div>
+<div class="sw"><div class="chip" style="background:#FFB4A8"></div><div><b>error</b>#FFB4A8</div></div>
+<div class="sw"><div class="chip" style="background:linear-gradient(180deg,#0E3B33,#0B0F0E)"></div><div><b>fallback artwork gradient</b>#0E3B33 → bg</div></div>
+</div>
+
+<h2>Color — Light</h2>
+<div class="light"><p><span class="pill" style="background:#006B32;color:#fff">primary #006B32</span>
+<span class="pill" style="background:#A9F2BC;color:#00210C">primaryContainer #A9F2BC</span>
+<span class="pill" style="background:#fff;border:1px solid #CBD5CF">surface #FFFFFF</span></p>
+<p>background #F7FAF8 · onSurface #171D1A (14.9:1) · onSurfaceVariant #4A5550 (7.4:1) · tertiary #8A5A00 · error #BA1A1A · Artwork headers keep white-on-black-scrim text in both themes.</p></div>
+
+<h2>Typography (system sans / M3 scale)</h2>
+<div class="type">
+<div style="font-size:40px;font-weight:700">DisplayLarge 40/44 Bold — Good evening</div>
+<div style="font-size:28px;font-weight:700">HeadlineLarge 28/34 Bold — Screen titles</div>
+<div style="font-size:24px;font-weight:600">HeadlineMedium 24/30 SemiBold — Sections, player title</div>
+<div style="font-size:18px;font-weight:600">TitleLarge 18/24 SemiBold</div>
+<div style="font-size:16px;font-weight:500">TitleMedium 16/22 Medium — song rows (workhorse)</div>
+<div style="font-size:14px">BodyMedium 14/20 — artist lines, descriptions</div>
+<div style="font-size:12px;color:var(--muted)">BodySmall 12/16 — durations, meta · minimum size in app</div>
+<div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)">LabelSmall — eyebrow: Album · Playlist · Single</div>
+</div>
+
+<h2>Spacing / Radius / Key sizes</h2>
+<table>
+<tr><th>Token</th><th>Value</th><th>Use</th></tr>
+<tr><td>spacing</td><td>4 · 8 · 12 · <b>16 (margin)</b> · 24 · 32 · 48</td><td>4dp base grid; section gap 24</td></tr>
+<tr><td>radius</td><td>artwork row 8 · card 12 · hero/player 16 · sheet top 28 · dialog 24</td><td>one radius scale everywhere</td></tr>
+<tr><td>song row</td><td>72dp high · 56dp art</td><td>invariant in every list</td></tr>
+<tr><td>mini-player</td><td>64dp + 2dp progress</td><td>floats 8dp-inset above 80dp bottom nav</td></tr>
+<tr><td>play button</td><td>64dp player / 56dp header pill</td><td>white bg, black glyph</td></tr>
+<tr><td>touch targets</td><td>≥ 48 × 48dp</td><td>all controls; seek touch band 48dp</td></tr>
+</table>
+
+<h2>Signature components</h2>
+<div class="mini"><div class="art"></div><div style="flex:1"><b style="font-size:14px">Song title</b><br><span style="color:var(--muted);font-size:14px">Artist · Album</span></div><span style="font-size:22px">♥</span><span style="font-size:26px">⏸</span></div>
+<p style="font-size:12px">▲ Mini-player mock (surfaceContainerHigh, r12, EQ + primary title when playing)</p>
+<div style="display:flex;gap:20px;align-items:center"><div class="play">▶</div><p>Full-player Play/Pause — the highest-contrast element on screen, independent of artwork color.</p></div>
+<p><span class="pill" style="background:var(--pricont);color:var(--onpricont)">✓ Selected chip</span>
+<span class="pill" style="background:var(--surface2);color:var(--text)">Unselected chip</span>
+<span style="border:1px solid var(--outline);border-radius:4px;padding:2px 6px;font-size:12px;color:var(--muted)">320 kbps tag</span></p>
+</body></html>

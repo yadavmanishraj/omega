@@ -1,9 +1,25 @@
 # Omega — Saavn Music (Android)
 
+[![Android CI](https://github.com/yadavmanishraj/omega/actions/workflows/android-ci.yml/badge.svg)](https://github.com/yadavmanishraj/omega/actions/workflows/android-ci.yml)
+
 A professional, fully-featured JioSaavn music app for Android. **No login. No sign-up. No account.** The app opens straight into music.
 
 > Publishing target: https://github.com/yadavmanishraj/omega
 > Clone: `git clone https://github.com/yadavmanishraj/omega.git`
+
+## SDLC
+
+This app was built following a full SDLC: API research → UI/UX design → application
+architecture → implementation. The design deliverables live in
+[`docs/sdlc/`](docs/sdlc/):
+
+- [API Research](docs/sdlc/API_RESEARCH.md) — endpoint-by-endpoint study of `jiosaavn-api` (and `jiosaavn-dl`)
+- [UI/UX Design](docs/sdlc/UIUX_DESIGN.md) — design system, tokens, screen specs ([palette.html](docs/sdlc/palette.html) renders the palette)
+- [Application Design](docs/sdlc/APP_DESIGN.md) — architecture, data, playback, downloads, testing and CI design
+- [Gap Analysis](docs/sdlc/GAP_ANALYSIS.md) — honest design-vs-v1 comparison and phased roadmap
+
+CI: the **Android CI** workflow ([runs](https://github.com/yadavmanishraj/omega/actions)) runs
+lint, unit tests and a debug build on every push/PR to `main` (and on manual dispatch).
 
 ## Features
 - **Home** — trending songs list + horizontal carousels (Albums, Playlists, Artists), Recently Played
