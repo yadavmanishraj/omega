@@ -12,11 +12,15 @@
 > are marked inline with **[CLOSED 2026-10-07]**; everything else stands
 > as written. New/remaining honest gaps after the rebuild:
 >
-> - **Fonts deviation:** the redesign's Righteous/Poppins downloadable
->   fonts are NOT wired — the GMS certs resource could not be validated
->   without a device build. The full type scale (sizes/weights/leading)
->   is implemented; families resolve to the platform default via a
->   single drop-in point in `core/designsystem` Theme.kt.
+> - **Fonts deviation: [CLOSED — bundled fonts]** the redesign's
+>   Righteous/Poppins families are now wired by BUNDLING the static
+>   TTFs in `:core:designsystem` (`res/font/`: Righteous 400; Poppins
+>   400/500/600/700; SIL OFL 1.1, license texts in the same directory)
+>   instead of the Google Fonts downloadable provider — so no GMS
+>   certs array is needed at all and text renders in the brand fonts
+>   on first frame. `Theme.kt`'s drop-in point now resolves
+>   `DisplayFontFamily`/`BodyFontFamily` to the bundled families;
+>   the spec §2.2 type scale is unchanged.
 > - **Suggestions:** implemented against upstream radio calls, but
 >   `webradio.getSong` is currently broken upstream (always an error
 >   body), so suggestions return empty by design and nothing depends
@@ -75,7 +79,7 @@
 | Area | Design | v1 code | Status |
 |---|---|---|---|
 | No login / no sign-up | No accounts anywhere; app opens straight into music | Fully honoured — no auth screens, no onboarding gate, first composition is Home | ✅ |
-| Core theme tokens | Dark bg `#0B0F0E`, surface `#121715`, primary `#3BE477`; light bg `#F7FAF8`, primary `#006B32` (UIUX §3.1) | **[CLOSED 2026-10-07 — superseded by REDESIGN_SPEC]** Full token system in `:core:designsystem` (midnight/indigo schemes, complete role sets, type scale, `OmegaSpacing`/`OmegaRadius`); fonts are the documented deviation above | ✅ |
+| Core theme tokens | Dark bg `#0B0F0E`, surface `#121715`, primary `#3BE477`; light bg `#F7FAF8`, primary `#006B32` (UIUX §3.1) | **[CLOSED 2026-10-07 — superseded by REDESIGN_SPEC]** Full token system in `:core:designsystem` (midnight/indigo schemes, complete role sets, type scale, `OmegaSpacing`/`OmegaRadius`); fonts closed too — Righteous/Poppins bundled in `res/font` (see fonts note above) | ✅ |
 | Bottom nav + mini-player | Home / Search / Library, persistent mini-player, Settings reachable | Present (plus Settings as a 4th nav item, where design puts Settings behind a top-app-bar action) | 🟡 |
 | **Shared-element transition (signature)** | Mini-player → Full Player **shared-element artwork** animation, 350 ms; fallback slide-up + scale is allowed *only if flagged*; a plain state swap/fade is "not acceptable" (§7) | **Missing.** Full player is a boolean state switch (`showPlayer`) reusing the same artwork composable — there is no `SharedTransitionLayout`, no slide/scale animation, and this was not flagged in the v1 PR notes. Flagged here instead | ❌ |
 | Artwork-derived palette | Palette extraction from artwork, player/header gradients, contrast-scrim invariant, teal fallback, 300 ms crossfade (§3.1.3) | **Missing.** `GradientHeader` tints from the theme `primary` colour, not the artwork; "Dynamic / artwork colors" setting actually toggles Material You dynamic colour, not artwork palette. No Palette dependency | ❌ |
