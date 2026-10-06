@@ -49,7 +49,7 @@ class HomeViewModel
             repo.downloads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         val favorites: StateFlow<List<Song>> =
             repo.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-        val playlists: StateFlow<List<LocalPlaylist>> =
+        val userPlaylists: StateFlow<List<LocalPlaylist>> =
             repo.localPlaylists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         init {

@@ -87,7 +87,7 @@ fun SearchScreen(
     val recent by vm.recent.collectAsState()
     val tab by vm.tab.collectAsState()
     val searchedQuery by vm.searchedQuery.collectAsState()
-    val localPlaylists by vm.playlists.collectAsState()
+    val localPlaylists by vm.userPlaylists.collectAsState()
     val online by vm.online.collectAsState()
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
     val isIdle = searchedQuery.isBlank()

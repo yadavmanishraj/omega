@@ -78,7 +78,7 @@ fun HomeScreen(
     val history by vm.history.collectAsState()
     val downloads by vm.downloads.collectAsState()
     val favorites by vm.favorites.collectAsState()
-    val localPlaylists by vm.playlists.collectAsState()
+    val localPlaylists by vm.userPlaylists.collectAsState()
     val online by vm.online.collectAsState()
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
 
