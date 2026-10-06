@@ -44,18 +44,6 @@ data class Artist(
     val topAlbums: List<Album> = emptyList(),
 )
 
-sealed interface UiState<out T> {
-    data object Loading : UiState<Nothing>
-
-    data class Success<T>(
-        val data: T,
-    ) : UiState<T>
-
-    data class Error(
-        val message: String,
-    ) : UiState<Nothing>
-}
-
 fun formatDuration(sec: Long?): String {
     if (sec == null) return ""
     return "%d:%02d".format(sec / 60, sec % 60)

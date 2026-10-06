@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 rootProject.name = "SaavnMusic"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 include(":app")
+include(":core:model")
+include(":core:common")
