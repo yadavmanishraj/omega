@@ -52,6 +52,7 @@ dependencies {
     implementation(projects.core.ui)
     implementation(projects.core.data)
     implementation(projects.core.playback)
+    implementation(projects.core.download)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

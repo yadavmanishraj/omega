@@ -1,4 +1,4 @@
-package com.manishraj.saavnmusic.di
+package com.manishraj.saavnmusic.download.di
 
 import android.content.Context
 import androidx.work.WorkManager
@@ -10,13 +10,15 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * What is left of the old god AppModule: only the WorkManager singleton,
- * which moves to :core:download with the worker in a later step. Every
- * other binding now lives in the module that owns the implementation.
+ * Download providers owned by :core:download — currently just the
+ * WorkManager singleton (the last binding left in the old god
+ * AppModule). The Hilt worker factory itself is wired by
+ * `SaavnApplication` in :app, which stays the WorkManager
+ * `Configuration.Provider`.
  */
 @Module
 @InstallIn(SingletonComponent::class)
-object AppModule {
+object DownloadModule {
     @Provides
     @Singleton
     fun workManager(
