@@ -60,15 +60,16 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +77,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,6 +102,7 @@ import com.manishraj.saavnmusic.ui.components.safeGradientEnd
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
+import kotlinx.coroutines.launch
 
 /**
  * Shared-element key for the current song's artwork. The mini-player
@@ -336,6 +339,12 @@ private fun SeekBar(
         },
         modifier =
             Modifier.semantics {
+                // F-10: the stateful slider's own semantics surface
+                // neither a name nor a value in the accessibility
+                // dump — attach both. The label names the control;
+                // the state description keeps the "m:ss of m:ss"
+                // value text TalkBack announces.
+                contentDescription = "Seek"
                 stateDescription = "${formatDuration(shownSec)} of ${formatDuration(durationSec)}"
             },
     )
@@ -349,7 +358,7 @@ private fun SeekBar(
  * by shape + [stateDescription] (not tint alone), and the secondary
  * cluster (favorite/download/lyrics/sleep/speed) is de-emphasized
  * below them. Time labels use tabular figures; queue is a sheet with
- * an "Up next" header.
+ * a "Queue" header.
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -426,18 +435,10 @@ fun FullPlayer(
     var showLyrics by remember { mutableStateOf(false) }
     var lyrics by remember { mutableStateOf<String?>(null) }
     var lyricsLoaded by remember { mutableStateOf(false) }
-    var sleep by remember { mutableIntStateOf(0) }
-    val cycleSleep: () -> Unit = {
-        val next =
-            when (sleep) {
-                0 -> 15
-                15 -> 30
-                30 -> 60
-                else -> 0
-            }
-        sleep = next
-        vm.player.setSleepTimer(next)
-    }
+    // No sleep-timer state here (F-05): the armed preset and the
+    // countdown live in PlayerState, published by the controller —
+    // a composition-local `remember` forgot the armed timer on
+    // every collapse while the timer itself kept running.
     LaunchedEffect(showLyrics, cur.id) {
         if (showLyrics) {
             lyricsLoaded = false
@@ -461,8 +462,6 @@ fun FullPlayer(
             playFill = playFill,
             playContent = playContent,
             tertiaryAccent = tertiaryAccent,
-            sleepMinutes = sleep,
-            onCycleSleep = cycleSleep,
             showLyrics = showLyrics,
             onToggleLyrics = { showLyrics = !showLyrics },
             lyrics = lyrics,
@@ -550,9 +549,17 @@ fun FullPlayer(
         }
     }
     if (showQueue) {
-        ModalBottomSheet(onDismissRequest = { showQueue = false }) {
+        val sheetState = rememberModalBottomSheetState()
+        val sheetScope = rememberCoroutineScope()
+        ModalBottomSheet(
+            onDismissRequest = { showQueue = false },
+            sheetState = sheetState,
+        ) {
+            // "Queue", not "Up next" (F-21): the list is the WHOLE
+            // queue — already-played tracks above the highlighted
+            // current one included.
             Text(
-                "Up next",
+                "Queue",
                 modifier = Modifier.padding(OmegaSpacing.lg),
                 style = MaterialTheme.typography.titleMedium,
             )
@@ -567,7 +574,15 @@ fun FullPlayer(
                     // deprecated.
                     ListItem(
                         selected = isCurrent,
-                        onClick = { vm.player.playIndex(index) },
+                        onClick = {
+                            vm.player.playIndex(index)
+                            // A selection completes the sheet's task
+                            // (F-07): change the track AND dismiss, so
+                            // the user sees the result of the tap.
+                            sheetScope
+                                .launch { sheetState.hide() }
+                                .invokeOnCompletion { showQueue = false }
+                        },
                         modifier =
                             Modifier
                                 .animateItem()
@@ -635,9 +650,9 @@ private fun PlayerTopBar(
  * Extracted verbatim from the portrait column (Wave 3) so the
  * landscape split's controls pane renders the SAME controls driven
  * by the SAME state — no behavior lives here that the portrait path
- * doesn't share. [vm] carries the player/library actions; the few
- * pieces of FullPlayer-local state (sleep minutes, lyrics
- * visibility and payload) arrive as values + callbacks.
+ * doesn't share. [vm] carries the player/library actions; the sleep
+ * timer reads [st] directly (its truth is the controller's, F-05);
+ * lyrics visibility and payload arrive as values + callbacks.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -651,14 +666,13 @@ private fun PlayerControls(
     playFill: Color,
     playContent: Color,
     tertiaryAccent: Color,
-    sleepMinutes: Int,
-    onCycleSleep: () -> Unit,
     showLyrics: Boolean,
     onToggleLyrics: () -> Unit,
     lyrics: String?,
     lyricsLoaded: Boolean,
 ) {
     val ctx = LocalContext.current
+    val snackbar = LocalOmegaSnackbar.current
     Text(
         cur.name,
         style = MaterialTheme.typography.displaySmallEmphasized,
@@ -783,7 +797,13 @@ private fun PlayerControls(
         }
     }
     Row {
-        IconButton(onClick = { vm.toggleFavorite(cur, isFavorite) }) {
+        IconButton(
+            onClick = { vm.toggleFavorite(cur, isFavorite) },
+            modifier =
+                Modifier.semantics {
+                    stateDescription = if (isFavorite) "Favorite on" else "Favorite off"
+                },
+        ) {
             OmegaFavoriteIcon(
                 isFavorite = isFavorite,
                 tint = if (isFavorite) tertiaryAccent else LocalContentColor.current,
@@ -797,6 +817,11 @@ private fun PlayerControls(
                         cur,
                         vm.appSettings.value.downloadQuality,
                     )
+                } else {
+                    // State-aware (F-09): tapping the downloaded
+                    // state says so instead of silently doing
+                    // nothing.
+                    snackbar?.showMessage("Already downloaded")
                 }
             },
         ) {
@@ -806,28 +831,59 @@ private fun PlayerControls(
                 tint = if (isDownloaded) tertiaryAccent else LocalContentColor.current,
             )
         }
-        IconButton(onClick = onToggleLyrics) {
+        // Lyrics is a toggle and must LOOK like one (F-09): while
+        // the lyrics block is shown the button carries the tonal
+        // selected container; TalkBack hears the state too (F-10).
+        IconToggleButton(
+            checked = showLyrics,
+            onCheckedChange = { onToggleLyrics() },
+            colors =
+                IconButtonDefaults.iconToggleButtonColors(
+                    checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    checkedContentColor = tertiaryAccent,
+                ),
+            modifier =
+                Modifier.semantics {
+                    stateDescription = if (showLyrics) "Lyrics on" else "Lyrics off"
+                },
+        ) {
             Icon(Icons.Filled.Lyrics, contentDescription = "Lyrics")
         }
         // Sleep timer, de-emphasized in the secondary cluster:
-        // a plain icon while off; once running it becomes a
-        // tonal chip carrying the set minutes, as before.
-        if (sleepMinutes > 0) {
+        // a plain icon while off; once armed it becomes a tonal
+        // chip carrying the live countdown. Both render from
+        // PlayerState (F-05) — the controller's armed preset and
+        // remaining time — so the control survives collapse/reopen
+        // and agrees with the timer that will actually fire.
+        if (st.sleepMinutes > 0) {
             FilledTonalButton(
-                onClick = onCycleSleep,
+                onClick = { vm.player.cycleSleepTimer() },
                 contentPadding =
                     PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
                 modifier =
                     Modifier
                         .align(Alignment.CenterVertically)
-                        .height(36.dp),
+                        .height(36.dp)
+                        .semantics {
+                            stateDescription = "Sleep timer, ${st.sleepMinutes} minutes"
+                        },
             ) {
                 Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer", modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(OmegaSpacing.xs))
-                Text("${sleepMinutes}m", maxLines = 1, softWrap = false)
+                Text(
+                    "${formatDuration(st.sleepRemainingMs / 1000)} left",
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         } else {
-            IconButton(onClick = onCycleSleep) {
+            IconButton(
+                onClick = { vm.player.cycleSleepTimer() },
+                modifier =
+                    Modifier.semantics {
+                        stateDescription = "Sleep timer off"
+                    },
+            ) {
                 Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
             }
         }
@@ -855,5 +911,10 @@ private fun PlayerControls(
                 },
             style = MaterialTheme.typography.bodyMedium,
         )
+        // Clearance (F-09): the lyrics block is the column's last
+        // content; without tail room its last line can sit under the
+        // shell's bottom chrome. The extra spacer guarantees the
+        // final line scrolls fully into the clear.
+        Spacer(Modifier.height(OmegaSpacing.xxl))
     }
 }
