@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -44,7 +45,6 @@ class HomeViewModel
         val online: StateFlow<Boolean> = connectivity.online
 
         private val _trending = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
-        val trending: StateFlow<UiState<List<Song>>> = _trending.asStateFlow()
         private val _albums = MutableStateFlow<UiState<List<Album>>>(UiState.Loading)
         val albums: StateFlow<UiState<List<Album>>> = _albums.asStateFlow()
         private val _playlists = MutableStateFlow<UiState<List<Playlist>>>(UiState.Loading)
@@ -54,6 +54,20 @@ class HomeViewModel
 
         val history: StateFlow<List<Song>> =
             repo.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        /**
+         * Trending, deduped against Jump back in (polish item 21,
+         * R-P3): the two sections are fed independently — trending from
+         * the browse payload, history from the local store — so a song
+         * the user just played would otherwise appear on Home twice.
+         * The dedupe lives at this seam, computed against the LIVE
+         * history flow (a song drops out of Trending the moment it is
+         * played, not just on the next load); the rule itself is the
+         * pure [dedupeTrending], unit-tested in isolation.
+         */
+        val trending: StateFlow<UiState<List<Song>>> =
+            combine(_trending, history) { state, played -> dedupeTrending(state, played) }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState.Loading)
         val downloads: StateFlow<List<DownloadInfo>> =
             repo.downloads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         val favorites: StateFlow<List<Song>> =
@@ -138,4 +152,31 @@ class HomeViewModel
                 }
             }
         }
+    }
+
+/**
+ * The polish item 21 / R-P3 dedupe as a pure function, so the rule is
+ * unit-testable without a ViewModel: a [UiState.Success] trending list
+ * loses every song whose id appears in [history] (Jump back in's
+ * content); the survivors' order is preserved, and duplicates INSIDE
+ * trending are untouched — this rule only arbitrates BETWEEN the two
+ * sections. Loading and Error pass through unchanged: there is
+ * nothing to dedupe. If the overlap empties the list, the result is
+ * `Success(emptyList())` and the screen omits the section, exactly as
+ * it does for a natively empty section.
+ */
+internal fun dedupeTrending(
+    trending: UiState<List<Song>>,
+    history: List<Song>,
+): UiState<List<Song>> =
+    when (trending) {
+        is UiState.Success -> {
+            if (history.isEmpty()) {
+                trending
+            } else {
+                val playedIds = history.mapTo(HashSet()) { it.id }
+                UiState.Success(trending.data.filterNot { it.id in playedIds })
+            }
+        }
+        else -> trending
     }

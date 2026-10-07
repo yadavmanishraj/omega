@@ -70,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavBackStackEntry
@@ -137,15 +138,15 @@ class MainActivity : ComponentActivity() {
  * shared element — the Material 3 container transform for
  * mini-player → player: opening the player morphs the 48dp thumbnail
  * into the 300dp artwork (and back, on collapse) while the surrounding
- * content cross-fades. Motion: the shell's own chrome follows
- * REDESIGN_SPEC §2.7 (emphasized tweens at their unmodified token
- * durations), while navigation and the PLAYER surfaces follow the M3
- * Expressive spec §4: tab switches fade through on the effects spec,
- * Detail pushes run a subtle shared-axis slide on slowSpatial, the
- * artwork flight is the theme's slowSpatial spring (interruptible,
- * velocity-preserving), the open/close fades run on defaultEffects,
- * and a predictive-back gesture scrubs the collapse before it
- * commits. Reduced motion is the theme's reactive binary provider
+ * content cross-fades. Motion: everything follows the M3 Expressive
+ * spec §4 — tab switches fade through on the effects spec, Detail
+ * pushes run a subtle shared-axis slide on slowSpatial, the artwork
+ * flight is the theme's slowSpatial spring (interruptible,
+ * velocity-preserving), the player open/close fades run on
+ * defaultEffects, the mini-player's own enter/exit pairs a
+ * defaultEffects alpha with a defaultSpatial size change (§4 motion
+ * map #3), and a predictive-back gesture scrubs the collapse before
+ * it commits. Reduced motion is the theme's reactive binary provider
  * ([LocalReducedMotion], re-read on ON_RESUME): scale 0 collapses
  * every shell decision below to crossfades / snaps.
  *
@@ -218,8 +219,17 @@ fun AppRoot() {
     // only); any other scale = the specs below run UNMODIFIED (the
     // pre-Wave-3 read-once + duration-scaling read is gone).
     val reducedMotion = LocalReducedMotion.current
-    val enterMs = OmegaMotion.SLOW_MS
-    val exitMs = OmegaMotion.EXIT_MS
+    // Font-scale nav mitigation (polish item 20): the bar/rail labels
+    // render single-line with no overflow handling, and at font
+    // scale 2.0 Track B measured them crowding the screen edge —
+    // "Settings" whole, but flush with ~3.4dp of clearance. At and
+    // above 1.6 the shell drops the labels and renders bar AND rail
+    // items icon-only (one decision, both surfaces): the selected
+    // indicator still carries the state, and each icon keeps the
+    // destination's name as its content description, so the items
+    // still announce themselves. Below 1.6 the labeled rendering is
+    // exactly what it was.
+    val iconOnlyNav = LocalDensity.current.fontScale >= ICON_ONLY_NAV_FONT_SCALE
     // Artwork flight for the container transform (M3 Expressive spec
     // §4.2): the theme's slowSpatial spring — interruptible and
     // velocity-preserving, so a collapse mid-flight (or a predictive
@@ -230,19 +240,26 @@ fun AppRoot() {
         BoundsTransform { _, _ ->
             motionScheme.slowSpatialSpec()
         }
+    // Mini-player enter/exit (polish item 24, R-P7 — spec §4 motion
+    // map #3): size runs on the scheme's defaultSpatialSpec and alpha
+    // on its defaultEffectsSpec, the same scheme-spec system the
+    // player expansion beside it uses; the old hand-built emphasized
+    // tweens made the one gesture seam run on two different curves.
+    // Reduced motion keeps the binary model (§2.5): a plain FAST
+    // crossfade, no size travel.
     val miniEnter =
         if (reducedMotion) {
             fadeIn(tween(OmegaMotion.FAST_MS))
         } else {
-            fadeIn(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate)) +
-                expandVertically(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate))
+            fadeIn(motionScheme.defaultEffectsSpec()) +
+                expandVertically(motionScheme.defaultSpatialSpec())
         }
     val miniExit =
         if (reducedMotion) {
             fadeOut(tween(OmegaMotion.FAST_MS))
         } else {
-            fadeOut(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate)) +
-                shrinkVertically(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate))
+            fadeOut(motionScheme.defaultEffectsSpec()) +
+                shrinkVertically(motionScheme.defaultSpatialSpec())
         }
     // While the player is open the NavHost is out of composition, so the
     // nav controller's own back handling is gone: system back collapses
@@ -490,7 +507,12 @@ fun AppRoot() {
                                         contentDescription = dest.label,
                                     )
                                 },
-                                label = { Text(dest.label, maxLines = 1, softWrap = false) },
+                                label =
+                                    if (iconOnlyNav) {
+                                        null
+                                    } else {
+                                        { Text(dest.label, maxLines = 1, softWrap = false) }
+                                    },
                             )
                         }
                         Spacer(Modifier.weight(1f))
@@ -546,7 +568,12 @@ fun AppRoot() {
                                                     contentDescription = dest.label,
                                                 )
                                             },
-                                            label = { Text(dest.label, maxLines = 1, softWrap = false) },
+                                            label =
+                                                if (iconOnlyNav) {
+                                                    null
+                                                } else {
+                                                    { Text(dest.label, maxLines = 1, softWrap = false) }
+                                                },
                                         )
                                     }
                                 }
@@ -570,6 +597,14 @@ private data class TopLevelDestination(
 /** Medium-width lower bound (RESEARCH_4 §2.1): 600dp and up is the
  * medium width class — the shell swaps its bottom bar for a rail. */
 private const val MEDIUM_WIDTH_LOWER_BOUND_DP = 600
+
+/** Font scale at and above which the shell's bar and rail items
+ * render icon-only (polish item 20): past this scale the
+ * single-line labels crowd the screen edge (Track B: "Settings"
+ * flush at 2.0), so the labels step aside and the icons — which
+ * keep the destinations' names as content descriptions — carry
+ * the items alone. */
+private const val ICON_ONLY_NAV_FONT_SCALE = 1.6f
 
 /** Shared-axis travel for pushes (spec §4.5): a few percent of the
  * width — these are reading surfaces, so amplitudes stay small. */
