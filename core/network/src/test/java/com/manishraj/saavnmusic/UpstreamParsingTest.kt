@@ -10,6 +10,7 @@ import com.manishraj.saavnmusic.data.remote.dto.RawPagedDto
 import com.manishraj.saavnmusic.data.remote.dto.RawPlaylistDto
 import com.manishraj.saavnmusic.data.remote.dto.RawSongDto
 import com.manishraj.saavnmusic.data.remote.dto.RawStationEntryDto
+import com.manishraj.saavnmusic.data.remote.normalizeDescriptionText
 import com.manishraj.saavnmusic.data.remote.toDomain
 import com.manishraj.saavnmusic.data.remote.toHomeContent
 import com.manishraj.saavnmusic.domain.TopResult
@@ -298,5 +299,61 @@ class UpstreamParsingTest {
         val playlist = json.decodeFromString<RawPlaylistDto>(fixture)
         assertEquals("Playlist One", playlist.title)
         assertTrue(playlist.list.isEmpty())
+    }
+
+    // F-03 regression: the LIVE header_desc of playlist 903166403
+    // ("Best Of Romance – Hindi") pads its first line with 136 spaces
+    // before the newline. The run hangs on the line instead of
+    // wrapping, and the centered Detail header centered the line by
+    // its full advance width — sentence sheared off the left edge.
+    @Test
+    fun playlistHeaderDescSpacePaddingIsCollapsed() {
+        val padding = " ".repeat(136)
+        val fixture =
+            """
+            {"id":"903166403","title":"Best Of Romance - Hindi","type":"playlist","list_count":"44",
+             "header_desc":"Top love songs in Hindi.$padding\nArtists On Cover: Sidharth Malhotra &amp; Kiara Advani",
+             "list":""}
+            """.trimIndent()
+        val playlist = json.decodeFromString<RawPlaylistDto>(fixture).toDomain()
+        assertEquals(
+            "Top love songs in Hindi.\nArtists On Cover: Sidharth Malhotra & Kiara Advani",
+            playlist.description,
+        )
+    }
+
+    // The pathology class, not just the one playlist: runs INSIDE a
+    // kept editorial line and padding on later lines collapse too,
+    // while the newline structure survives.
+    @Test
+    fun albumHeaderDescInternalSpaceRunsCollapse() {
+        val fixture =
+            """
+            {"id":"al9","title":"Moods","type":"album","list_count":"3",
+             "header_desc":"A romantic album.   Many   moods.\n  Second line   stays.  ",
+             "list":""}
+            """.trimIndent()
+        val album = json.decodeFromString<RawAlbumDto>(fixture).toDomain()
+        assertEquals("A romantic album. Many moods.\nSecond line stays.", album.description)
+    }
+
+    // Sane prose is lossless: single spaces and line breaks pass
+    // through byte-identical (entity decoding still applies).
+    @Test
+    fun cleanDescriptionProsePassesByteIdentical() {
+        val fixture =
+            """
+            {"id":"pl2","title":"Road","type":"playlist","list_count":"9",
+             "header_desc":"Songs for the road.\nCurated with care &amp; love","list":""}
+            """.trimIndent()
+        val playlist = json.decodeFromString<RawPlaylistDto>(fixture).toDomain()
+        assertEquals("Songs for the road.\nCurated with care & love", playlist.description)
+    }
+
+    @Test
+    fun normalizeDescriptionTextHandlesTabsAndBlankLines() {
+        assertEquals("One two\nThree", normalizeDescriptionText("  One \t two  \n\tThree\t"))
+        assertEquals("A\n\nB", normalizeDescriptionText("A\n\nB"))
+        assertEquals("", normalizeDescriptionText("   \n  "))
     }
 }
