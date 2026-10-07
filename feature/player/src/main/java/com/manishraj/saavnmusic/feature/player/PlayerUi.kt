@@ -1,5 +1,9 @@
 package com.manishraj.saavnmusic.feature.player
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -64,9 +68,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.work.WorkManager
+import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.ui.components.Artwork
@@ -76,14 +82,66 @@ import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
 
 /**
+ * Shared-element key for the current song's artwork. The mini-player
+ * and the full player share an element only while both show the same
+ * song, so a track change never morphs between two different artworks.
+ */
+private fun artworkSharedElementKey(songId: String): String = "artwork-$songId"
+
+/**
+ * The current song's artwork, shared between the mini-player and the
+ * full player when [sharedTransitionScope] is present. A null scope is
+ * the reduced-motion path (system animator duration scale 0, see
+ * REDESIGN_SPEC §2.7): no spatial flight — the artwork crossfades with
+ * the rest of its screen instead. The scale is read once in the app
+ * root, so which branch runs never changes during a composition's life.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun SharedArtwork(
+    song: Song,
+    size: Int,
+    corner: Dp,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    artworkBoundsTransform: BoundsTransform,
+) {
+    if (sharedTransitionScope == null) {
+        Artwork(song.imageUrl, size, corner, contentDescription = song.name)
+        return
+    }
+    with(sharedTransitionScope) {
+        Artwork(
+            song.imageUrl,
+            size,
+            corner,
+            contentDescription = song.name,
+            modifier =
+                Modifier.sharedElement(
+                    sharedContentState =
+                        rememberSharedContentState(
+                            key = artworkSharedElementKey(song.id),
+                        ),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = artworkBoundsTransform,
+                ),
+        )
+    }
+}
+
+/**
  * Mini-player (REDESIGN_SPEC §3.2): sacred — anchored above the nav bar,
  * swipe/back never stops playback. Progress hairline on top, a fixed
  * 24dp buffering slot so the layout never shifts, 48dp targets.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MiniPlayer(
     vm: PlayerViewModel = hiltViewModel(),
     onOpen: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    artworkBoundsTransform: BoundsTransform,
 ) {
     val st by vm.state.collectAsState()
     val cur = st.current ?: return
@@ -122,7 +180,14 @@ fun MiniPlayer(
                         .padding(OmegaSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Artwork(cur.imageUrl, 48, OmegaRadius.md, contentDescription = cur.name)
+                    SharedArtwork(
+                        song = cur,
+                        size = 48,
+                        corner = OmegaRadius.md,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        artworkBoundsTransform = artworkBoundsTransform,
+                    )
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -176,11 +241,14 @@ fun MiniPlayer(
  * primary CTA (primary container, onPrimary glyph, 64dp); time labels
  * use tabular figures; queue is a sheet with an "Up next" header.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun FullPlayer(
     vm: PlayerViewModel = hiltViewModel(),
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    artworkBoundsTransform: BoundsTransform,
 ) {
     val st by vm.state.collectAsState()
     val cur = st.current
@@ -240,7 +308,14 @@ fun FullPlayer(
                     Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue")
                 }
             }
-            Artwork(cur.imageUrl, 300, OmegaRadius.xl, contentDescription = cur.name)
+            SharedArtwork(
+                song = cur,
+                size = 300,
+                corner = OmegaRadius.xl,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                artworkBoundsTransform = artworkBoundsTransform,
+            )
             Spacer(Modifier.height(OmegaSpacing.xl))
             Text(
                 cur.name,
