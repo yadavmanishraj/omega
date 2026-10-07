@@ -53,11 +53,19 @@ import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import kotlinx.coroutines.delay
 
-/**
+/*
  * Shared UI primitives (REDESIGN_SPEC §3.4): every screen composes these
  * so spacing, radii, type roles and accessibility behavior stay uniform.
  * All sizes come from the design tokens; no ad-hoc hex anywhere.
  */
+
+/**
+ * Count label that agrees in number — "1 song", otherwise
+ * "N songs". Every song-count label in the app goes through here
+ * (exhaustive QA BUG-4: picker, Downloads header, Library and
+ * Search playlist rows all rendered "1 songs").
+ */
+fun songCountLabel(count: Int): String = if (count == 1) "1 song" else "$count songs"
 
 @Composable
 fun Artwork(

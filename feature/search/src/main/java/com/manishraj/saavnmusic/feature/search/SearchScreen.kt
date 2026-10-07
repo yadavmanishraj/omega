@@ -63,6 +63,7 @@ import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
+import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
@@ -402,7 +403,7 @@ fun SearchScreen(
                             modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
                         ) {
                             items(playlists) { p ->
-                                MediaCard(p.name, "${p.songCount ?: 0} songs", p.imageUrl) { onPlaylist(p.id) }
+                                MediaCard(p.name, songCountLabel(p.songCount ?: 0), p.imageUrl) { onPlaylist(p.id) }
                             }
                         }
                 }

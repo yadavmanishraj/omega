@@ -187,7 +187,7 @@ fun PlaylistPickerDialog(
                             ListItem(
                                 supportingContent = {
                                     Text(
-                                        "${playlist.songCount} songs",
+                                        songCountLabel(playlist.songCount),
                                         style = MaterialTheme.typography.bodyMedium,
                                     )
                                 },
