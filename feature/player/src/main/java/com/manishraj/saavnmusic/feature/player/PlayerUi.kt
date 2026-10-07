@@ -283,7 +283,7 @@ fun MiniPlayer(
                     SharedArtwork(
                         song = cur,
                         size = 48,
-                        corner = OmegaRadius.md,
+                        corner = OmegaRadius.lg,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                         artworkBoundsTransform = artworkBoundsTransform,
@@ -656,7 +656,7 @@ fun FullPlayer(
                                         stateDescription = "Now playing"
                                     }
                                 },
-                        leadingContent = { Artwork(s.imageUrl, 44, OmegaRadius.md) },
+                        leadingContent = { Artwork(s.imageUrl, 44, OmegaRadius.lg) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (isCurrent) {
