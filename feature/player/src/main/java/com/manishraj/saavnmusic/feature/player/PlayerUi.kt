@@ -121,7 +121,7 @@ private fun SharedArtwork(
             contentDescription = song.name,
             modifier =
                 Modifier.sharedElement(
-                    state =
+                    sharedContentState =
                         rememberSharedContentState(
                             key = artworkSharedElementKey(song.id),
                         ),
