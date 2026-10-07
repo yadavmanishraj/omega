@@ -51,6 +51,13 @@ dependencies {
     implementation(libs.compose.material.icons)
 
     implementation(libs.hilt.work)
+    // SaavnApplication implements androidx.work.Configuration.Provider
+    // directly, so the WorkManager runtime must be on this module's own
+    // compile classpath at the catalog version. Without this, :app silently
+    // compiled against hilt-work's ancient transitive work-runtime 2.3.4,
+    // whose Provider shape Kotlin 2.4 no longer accepts a property override
+    // for (the runtime classpath already resolved 2.10.0 via :core:download).
+    implementation(libs.work.runtime)
 
     testImplementation(libs.junit)
 }
