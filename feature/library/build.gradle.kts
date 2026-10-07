@@ -19,4 +19,5 @@ dependencies {
     // fakes for the ViewModel tests.
     testImplementation(libs.okhttp)
     testImplementation(libs.datastore)
+    testImplementation(libs.kotlinx.serialization.json)
 }
