@@ -173,6 +173,7 @@ private fun rememberPlaylistPicker(vm: DetailViewModel): (Song) -> Unit {
     target?.let { song ->
         PlaylistPickerDialog(
             playlists = playlists,
+            targetSong = song,
             onPick = { playlist ->
                 vm.addToPlaylist(playlist.id, song)
                 target = null

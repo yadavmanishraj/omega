@@ -496,6 +496,7 @@ fun SearchScreen(
         playlistTarget?.let { song ->
             PlaylistPickerDialog(
                 playlists = localPlaylists,
+                targetSong = song,
                 onPick = { playlist ->
                     vm.addToPlaylist(playlist.id, song)
                     playlistTarget = null

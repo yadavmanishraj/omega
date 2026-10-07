@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
@@ -156,10 +157,16 @@ fun SongOverflowMenuButton(
  * straight on the create form; when a list exists, create mode is a
  * reversible detour (title-row back arrow + system Back, F-11), not a
  * one-way door.
+ *
+ * [targetSong] is the song being added; its name rides under the
+ * title in both modes (polish item 2), so the action's object is
+ * visible before and at the moment of choice — a mis-tap from a long
+ * list must not act on an invisible target.
  */
 @Composable
 fun PlaylistPickerDialog(
     playlists: List<LocalPlaylist>,
+    targetSong: Song,
     onPick: (LocalPlaylist) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -183,10 +190,16 @@ fun PlaylistPickerDialog(
                             contentDescription = "Back to playlists",
                         )
                     }
-                    Text("New playlist")
+                    Column {
+                        Text("New playlist")
+                        TargetSongLine(targetSong)
+                    }
                 }
             } else {
-                Text(if (creating) "New playlist" else "Add to playlist")
+                Column {
+                    Text(if (creating) "New playlist" else "Add to playlist")
+                    TargetSongLine(targetSong)
+                }
             }
         },
         text = {
@@ -200,7 +213,7 @@ fun PlaylistPickerDialog(
                     interacted = nameInteracted,
                     intro =
                         if (playlists.isEmpty()) {
-                            "You don't have any playlists yet — create your first one."
+                            "You don't have any playlists yet. Create your first one."
                         } else {
                             null
                         },
@@ -257,6 +270,24 @@ fun PlaylistPickerDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
+    )
+}
+
+/**
+ * The picker's target line (polish item 2): the name of the song
+ * being added, under the dialog title in both list and create modes.
+ * Plain text in the title slot — TalkBack reads it as part of the
+ * dialog's header, so the announced target matches the visible one.
+ */
+@Composable
+private fun TargetSongLine(song: Song) {
+    Spacer(Modifier.height(OmegaSpacing.xs))
+    Text(
+        song.name,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
