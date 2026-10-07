@@ -8,7 +8,8 @@ import org.gradle.kotlin.dsl.configure
 
 /**
  * omega.android.library — base Android library configuration for Omega
- * (mirrors Now in Android's AndroidLibraryConventionPlugin): compileSdk 35,
+ * (mirrors Now in Android's AndroidLibraryConventionPlugin): compileSdk 37
+ * (required by Compose 1.12 / BOM 2026.09.00),
  * minSdk 26, JVM 17, the standard test runner, and a resource prefix derived
  * from the module path (":core:network" -> "core_network_").
  */
@@ -19,7 +20,7 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
             apply(plugin = "org.jetbrains.kotlin.android")
 
             extensions.configure<LibraryExtension> {
-                compileSdk = 35
+                compileSdk = 37
 
                 defaultConfig {
                     minSdk = 26

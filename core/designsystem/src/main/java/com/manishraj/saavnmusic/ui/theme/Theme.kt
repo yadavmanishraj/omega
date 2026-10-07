@@ -2,7 +2,12 @@ package com.manishraj.saavnmusic.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -65,6 +70,27 @@ object OmegaRadius {
     val xxl = 24.dp
 }
 
+/**
+ * Material shape scale for Omega (M3 Expressive spec §2.3). The classic five
+ * slots continue the [OmegaRadius] scale (4/8/12/16, hero 28) so stock
+ * components keep their current corners; the expressive `…Increased` slots
+ * and `extraExtraLarge` extend the same scale for hero surfaces (player
+ * artwork, sheets) in later waves. Artwork: medium in rows, large on cards,
+ * extraLarge in the player hero.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+val OmegaShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(OmegaRadius.sm),
+        small = RoundedCornerShape(OmegaRadius.md),
+        medium = RoundedCornerShape(OmegaRadius.lg),
+        large = RoundedCornerShape(OmegaRadius.xl),
+        largeIncreased = RoundedCornerShape(20.dp),
+        extraLarge = RoundedCornerShape(28.dp),
+        extraLargeIncreased = RoundedCornerShape(32.dp),
+        extraExtraLarge = RoundedCornerShape(48.dp),
+    )
+
 private val DarkColors =
     darkColorScheme(
         primary = Color(0xFF3BE477),
@@ -113,7 +139,16 @@ private val LightColors =
         scrim = Color(0x99000000),
     )
 
-/** Type scale per spec §2.2 (Righteous display / Poppins body roles). */
+/**
+ * Type scale per spec §2.2 (Righteous display / Poppins body roles), plus the
+ * Material 3 Expressive `…Emphasized` twins for all 15 styles (M3 Expressive
+ * spec §2.2): same family and size as the baseline style, one weight step up
+ * (400→500, 500→700, 600→700). Defined for the redesign waves — screens do
+ * not consume the emphasized styles yet. Righteous ships a single weight, so
+ * its emphasized twins resolve to the same glyphs with the stepped weight
+ * recorded in the style.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val OmegaTypography =
     Typography(
         displaySmall =
@@ -193,6 +228,111 @@ private val OmegaTypography =
                 fontSize = 12.sp,
                 lineHeight = 16.sp,
             ),
+        displayLargeEmphasized =
+            TextStyle(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 57.sp,
+                lineHeight = 64.sp,
+            ),
+        displayMediumEmphasized =
+            TextStyle(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 45.sp,
+                lineHeight = 52.sp,
+            ),
+        displaySmallEmphasized =
+            TextStyle(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 36.sp,
+                lineHeight = 44.sp,
+            ),
+        headlineLargeEmphasized =
+            TextStyle(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 32.sp,
+                lineHeight = 40.sp,
+            ),
+        headlineMediumEmphasized =
+            TextStyle(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 28.sp,
+                lineHeight = 36.sp,
+            ),
+        headlineSmallEmphasized =
+            TextStyle(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                lineHeight = 32.sp,
+            ),
+        titleLargeEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                lineHeight = 28.sp,
+            ),
+        titleMediumEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+            ),
+        titleSmallEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+            ),
+        bodyLargeEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+            ),
+        bodyMediumEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+            ),
+        bodySmallEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+            ),
+        labelLargeEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+            ),
+        labelMediumEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+            ),
+        labelSmallEmphasized =
+            TextStyle(
+                fontFamily = BodyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+            ),
     )
 
 /** Player time labels: tabular figures so timers never jitter (spec §2.2). */
@@ -200,6 +340,7 @@ val TabularTimeStyle: TextStyle
     @Composable
     get() = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum")
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SaavnTheme(
     dark: Boolean = isSystemInDarkTheme(),
@@ -227,5 +368,15 @@ fun SaavnTheme(
             dark -> DarkColors
             else -> LightColors
         }
-    MaterialTheme(colorScheme = colors, typography = OmegaTypography, content = content)
+    // Material 3 Expressive foundation (M3_EXPRESSIVE_SPEC §0/§2.1): the
+    // expressive theme with the expressive motion scheme; the color
+    // resolution above is unchanged. Accessors below this theme stay
+    // MaterialTheme.colorScheme / .typography / .shapes / .motionScheme.
+    MaterialExpressiveTheme(
+        colorScheme = colors,
+        motionScheme = MotionScheme.expressive(),
+        shapes = OmegaShapes,
+        typography = OmegaTypography,
+        content = content,
+    )
 }
