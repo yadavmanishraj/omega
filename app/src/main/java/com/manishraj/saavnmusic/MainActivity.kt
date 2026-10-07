@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -11,6 +12,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -41,8 +44,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -71,6 +76,8 @@ import com.manishraj.saavnmusic.ui.components.rememberOmegaSnackbarController
 import com.manishraj.saavnmusic.ui.theme.OmegaMotion
 import com.manishraj.saavnmusic.ui.theme.SaavnTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -105,10 +112,13 @@ class MainActivity : ComponentActivity() {
  * shared element — the Material 3 container transform for
  * mini-player → player: opening the player morphs the 48dp thumbnail
  * into the 300dp artwork (and back, on collapse) while the surrounding
- * content cross-fades. Motion follows REDESIGN_SPEC §2.7 / Material 3:
- * emphasized easing, exits shorter than enters, tweens only (no
- * springs, no overshoot), and the system animator duration scale is
- * honored — at scale 0 (reduced motion) only crossfades remain.
+ * content cross-fades. Motion: the shell's own chrome still follows
+ * REDESIGN_SPEC §2.7 (emphasized tweens, system animator duration
+ * scale honored — at scale 0 / reduced motion only crossfades remain),
+ * while the PLAYER surfaces follow the M3 Expressive spec §4: the
+ * artwork flight is the theme's slowSpatial spring (interruptible,
+ * velocity-preserving), the open/close fades run on defaultEffects,
+ * and a predictive-back gesture scrubs the collapse before it commits.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -138,13 +148,15 @@ fun AppRoot() {
     val reducedMotion = animatorScale == 0f
     val enterMs = (OmegaMotion.SLOW_MS * animatorScale).roundToInt()
     val exitMs = (OmegaMotion.EXIT_MS * animatorScale).roundToInt()
-    // Artwork flight for the container transform (UIUX_DESIGN §7):
-    // 350 ms emphasized, a true mirror in both directions. A tween,
-    // never a spring: no overshoot in a media app.
-    val artworkFlightMs = (OmegaMotion.CONTAINER_MS * animatorScale).roundToInt()
+    // Artwork flight for the container transform (M3 Expressive spec
+    // §4.2): the theme's slowSpatial spring — interruptible and
+    // velocity-preserving, so a collapse mid-flight (or a predictive
+    // back that cancels) retargets smoothly instead of restarting a
+    // fixed tween.
+    val motionScheme = MaterialTheme.motionScheme
     val artworkBoundsTransform =
         BoundsTransform { _, _ ->
-            tween(durationMillis = artworkFlightMs, easing = OmegaMotion.emphasized)
+            motionScheme.slowSpatialSpec()
         }
     val miniEnter =
         if (reducedMotion) {
@@ -164,7 +176,34 @@ fun AppRoot() {
     // nav controller's own back handling is gone: system back collapses
     // the player here (running the reverse transition) instead of
     // leaving the app while playback keeps going.
-    BackHandler(enabled = showPlayer) { showPlayer = false }
+    //
+    // Predictive back (M3 Expressive spec §4.6): the gesture scrubs the
+    // collapse — the player fades/shrinks with the gesture progress —
+    // and only commits (showPlayer = false, the standard reverse
+    // transition) when the gesture completes. A cancelled gesture
+    // springs the progress back to 0 on slowSpatial. Reduced motion
+    // keeps the plain instant BackHandler: no scrub, no spring.
+    val backProgress = remember { Animatable(0f) }
+    val backSettleSpec = remember(motionScheme) { motionScheme.slowSpatialSpec<Float>() }
+    val compositionScope = rememberCoroutineScope()
+    if (reducedMotion) {
+        BackHandler(enabled = showPlayer) { showPlayer = false }
+    } else {
+        PredictiveBackHandler(enabled = showPlayer) { progressFlow ->
+            try {
+                progressFlow.collect { event -> backProgress.snapTo(event.progress) }
+                backProgress.snapTo(0f)
+                showPlayer = false
+            } catch (e: CancellationException) {
+                // The handler's own coroutine is cancelled here, so
+                // the settle animation runs on the composition scope.
+                compositionScope.launch {
+                    backProgress.animateTo(0f, backSettleSpec)
+                }
+                throw e
+            }
+        }
+    }
     // App-wide snackbar feedback (spec §3/§7): one host for the whole
     // shell. The Scaffold's snackbar slot renders ABOVE the bottom
     // bar — i.e. above the mini-player — and screens fire messages
@@ -224,27 +263,46 @@ fun AppRoot() {
                         modifier = Modifier.fillMaxSize(),
                         transitionSpec = {
                             // Material 3 container transform: the shared
-                            // artwork morphs; everything else cross-fades —
-                            // decelerate in over SLOW, accelerate out over
-                            // the shorter EXIT. Reduced motion: crossfade
-                            // only, at the FAST token.
+                            // artwork morphs; everything else cross-fades.
+                            // Fades are EFFECTS — the theme's
+                            // defaultEffectsSpec (critically damped,
+                            // never overshoots; M3 Expressive spec
+                            // §4.3). Reduced motion: crossfade only, at
+                            // the FAST token.
                             if (reducedMotion) {
                                 fadeIn(tween(OmegaMotion.FAST_MS)) togetherWith
                                     fadeOut(tween(OmegaMotion.FAST_MS))
                             } else {
-                                fadeIn(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate)) togetherWith
-                                    fadeOut(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate))
+                                fadeIn(motionScheme.defaultEffectsSpec()) togetherWith
+                                    fadeOut(motionScheme.defaultEffectsSpec())
                             }
                         },
                         label = "playerExpand",
                     ) { playerOpen ->
+                        val contentScope = this
                         if (playerOpen) {
-                            FullPlayer(
-                                onBack = { showPlayer = false },
-                                sharedTransitionScope = if (reducedMotion) null else sharedScope,
-                                animatedVisibilityScope = this,
-                                artworkBoundsTransform = artworkBoundsTransform,
-                            )
+                            // Predictive-back scrub layer: while a back
+                            // gesture is in progress the player recedes
+                            // (fade + slight shrink) with the gesture;
+                            // at rest the progress is 0 and this layer
+                            // is identity.
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        val p = backProgress.value
+                                        alpha = 1f - 0.3f * p
+                                        scaleX = 1f - 0.08f * p
+                                        scaleY = 1f - 0.08f * p
+                                    },
+                            ) {
+                                FullPlayer(
+                                    onBack = { showPlayer = false },
+                                    sharedTransitionScope = if (reducedMotion) null else sharedScope,
+                                    animatedVisibilityScope = contentScope,
+                                    artworkBoundsTransform = artworkBoundsTransform,
+                                )
+                            }
                         } else {
                             NavHost(nav, startDestination = "home") {
                                 composable("home") {
