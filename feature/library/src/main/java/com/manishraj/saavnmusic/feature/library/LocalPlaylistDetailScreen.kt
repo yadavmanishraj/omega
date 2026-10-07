@@ -46,8 +46,9 @@ import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.GradientHeader
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaActionGroup
-import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
+import com.manishraj.saavnmusic.ui.components.OmegaSegmentedContainer
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
+import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.components.songCountLabel
@@ -86,13 +87,12 @@ fun LocalPlaylistDetailScreen(
     val current = playlist
     if (current == null) {
         // Loading (or gone, with the pop already queued above): the
-        // back affordance stays on screen so the state never reads
-        // as a dead end.
+        // Detail loading grammar (back bar + ShimmerList, polish
+        // item 14) — the back affordance stays on screen so the
+        // state never reads as a dead end.
         Column(Modifier.fillMaxSize()) {
             PlaylistDetailHeader(name = null, songCount = null, onBack = onBack)
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                OmegaLoadingIndicator(contentDescription = "Loading playlist")
-            }
+            ShimmerList()
         }
         return
     }
@@ -127,12 +127,12 @@ private fun PlaylistDetailHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Library")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
         Column {
             Text(
                 name ?: "",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -186,16 +186,10 @@ private fun LocalPlaylistDetailContent(
         }
         when {
             !songsResolved ->
-                item {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(240.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        OmegaLoadingIndicator(contentDescription = "Loading playlist")
-                    }
-                }
+                // The header above is already resolved; the song
+                // list loads as the same ShimmerList skeleton the
+                // unresolved state and remote Detail use (item 14).
+                item { ShimmerList() }
 
             songs.isEmpty() ->
                 item {
@@ -225,9 +219,10 @@ private fun LocalPlaylistDetailContent(
                                 .horizontalScroll(rememberScrollState()),
                     )
                 }
+                // Family rule (R-P2): Library-family lists are segmented; Detail-family lists are flat SongRows. Deliberate, not drift.
                 items(songs, key = { it.id }) { song ->
                     val songIsFavorite = favs.any { it.id == song.id }
-                    SegmentedSegment(
+                    OmegaSegmentedContainer(
                         Modifier
                             .animateItem()
                             .padding(horizontal = OmegaSpacing.lg),
@@ -275,6 +270,7 @@ private fun LocalPlaylistDetailContent(
     playlistTarget?.let { song ->
         PlaylistPickerDialog(
             playlists = playlists,
+            targetSong = song,
             onPick = { picked ->
                 vm.addToPlaylist(picked.id, song)
                 playlistTarget = null
@@ -322,7 +318,7 @@ private fun LocalPlaylistDetailHeader(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             PlaylistCoverArt(coverArtworks)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(OmegaSpacing.md))
             Text(
                 playlist.name,
                 // Same emphasized slot as remote Detail headers:
