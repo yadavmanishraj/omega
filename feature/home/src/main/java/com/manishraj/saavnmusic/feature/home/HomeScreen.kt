@@ -114,7 +114,7 @@ fun HomeScreen(
                                 if (refreshing) {
                                     1f
                                 } else {
-                                    pullToRefreshState.positionFraction.coerceIn(0f, 1f)
+                                    pullToRefreshState.distanceFraction.coerceIn(0f, 1f)
                                 }
                             alpha = fraction
                             scaleX = 0.7f + 0.3f * fraction
