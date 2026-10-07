@@ -358,6 +358,7 @@ class MusicRepository
                 s.imageUrl,
                 s.streamUrl,
                 dao.playlistSongCount(pid),
+                s.durationSec,
             ),
         )
 
@@ -394,6 +395,7 @@ class MusicRepository
                     removed.song.imageUrl,
                     removed.song.streamUrl,
                     removed.position,
+                    removed.song.durationSec,
                 ),
             )
         }
@@ -508,7 +510,7 @@ fun FavoriteEntity.toSong(): Song = Song(songId, name, artist, album, imageUrl, 
 
 fun HistoryEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, null, streamUrl)
 
-fun LocalPlaylistSongEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, null, streamUrl)
+fun LocalPlaylistSongEntity.toSong(): Song = Song(songId, name, artist, null, imageUrl, durationSec, streamUrl)
 
 fun DownloadEntity.toDownloadInfo(): DownloadInfo =
     DownloadInfo(songId, name, artist, album, imageUrl, filePath, quality, sizeBytes, status, progress, errorMessage)
