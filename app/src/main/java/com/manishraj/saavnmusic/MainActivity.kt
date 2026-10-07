@@ -350,6 +350,7 @@ fun AppRoot() {
                                     sharedTransitionScope = if (reducedMotion) null else sharedScope,
                                     animatedVisibilityScope = contentScope,
                                     artworkBoundsTransform = artworkBoundsTransform,
+                                    onDownloadEnqueued = onDownloadEnqueued,
                                 )
                             }
                         } else {
@@ -367,6 +368,7 @@ fun AppRoot() {
                                         onPlaylist = { nav.navigate("playlist/$it") },
                                         onArtist = { nav.navigate("artist/$it") },
                                         onPlayQueue = playQueue,
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                         onOpenDownloads = {
                                             nav.navigate("library?tab=$LIBRARY_TAB_DOWNLOADS") {
                                                 popUpTo(nav.graph.startDestinationId) { saveState = true }
@@ -382,6 +384,7 @@ fun AppRoot() {
                                         onPlaylist = { nav.navigate("playlist/$it") },
                                         onArtist = { nav.navigate("artist/$it") },
                                         onPlayQueue = playQueue,
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                         onOpenLibrary = {
                                             nav.navigate("library") {
                                                 popUpTo(nav.graph.startDestinationId) { saveState = true }
@@ -435,6 +438,7 @@ fun AppRoot() {
                                         it.arguments?.getString("id") ?: "",
                                         onPlayQueue = playQueue,
                                         onBack = { nav.popBackStack() },
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                     )
                                 }
                                 composable(
@@ -445,6 +449,7 @@ fun AppRoot() {
                                         it.arguments?.getString("id") ?: "",
                                         onPlayQueue = playQueue,
                                         onBack = { nav.popBackStack() },
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                     )
                                 }
                                 composable(
@@ -456,6 +461,7 @@ fun AppRoot() {
                                         onAlbum = { a -> nav.navigate("album/$a") },
                                         onPlayQueue = playQueue,
                                         onBack = { nav.popBackStack() },
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                     )
                                 }
                             }

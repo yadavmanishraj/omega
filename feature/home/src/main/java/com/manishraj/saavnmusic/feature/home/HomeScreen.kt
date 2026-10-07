@@ -94,6 +94,7 @@ fun HomeScreen(
     onArtist: (String) -> Unit,
     onPlayQueue: (List<Song>, Int) -> Unit,
     onOpenDownloads: () -> Unit,
+    onDownloadEnqueued: () -> Unit = {},
 ) {
     val trending by vm.trending.collectAsState()
     val albums by vm.albums.collectAsState()
@@ -278,6 +279,7 @@ fun HomeScreen(
                                         },
                                         onDownload = {
                                             vm.download(song)
+                                            onDownloadEnqueued()
                                             snackbar?.showMessage("Download queued")
                                         },
                                         onToggleFavorite = { vm.toggleFavorite(song, true) },
@@ -342,6 +344,7 @@ fun HomeScreen(
                                                     },
                                                     onDownload = {
                                                         vm.download(song)
+                                                        onDownloadEnqueued()
                                                         snackbar?.showMessage("Download queued")
                                                     },
                                                     onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },

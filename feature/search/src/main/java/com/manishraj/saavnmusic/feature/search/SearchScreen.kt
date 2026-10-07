@@ -86,6 +86,7 @@ fun SearchScreen(
     onArtist: (String) -> Unit,
     onPlayQueue: (List<Song>, Int) -> Unit,
     onOpenLibrary: () -> Unit,
+    onDownloadEnqueued: () -> Unit = {},
 ) {
     val query by vm.query.collectAsState()
     val songs by vm.songs.collectAsState()
@@ -334,6 +335,7 @@ fun SearchScreen(
                                                             },
                                                             onDownload = {
                                                                 vm.download(song)
+                                                                onDownloadEnqueued()
                                                                 snackbar?.showMessage("Download queued")
                                                             },
                                                             onToggleFavorite = {
@@ -393,6 +395,7 @@ fun SearchScreen(
                                                 },
                                                 onDownload = {
                                                     vm.download(song)
+                                                    onDownloadEnqueued()
                                                     snackbar?.showMessage("Download queued")
                                                 },
                                                 onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },

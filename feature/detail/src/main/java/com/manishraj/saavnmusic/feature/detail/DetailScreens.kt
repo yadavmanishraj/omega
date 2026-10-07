@@ -71,6 +71,7 @@ fun AlbumScreen(
     vm: DetailViewModel = hiltViewModel(),
     onPlayQueue: (List<Song>, Int) -> Unit,
     onBack: () -> Unit,
+    onDownloadEnqueued: () -> Unit = {},
 ) {
     LaunchedEffect(id) { vm.loadAlbum(id) }
     val s by vm.album.collectAsState()
@@ -89,6 +90,7 @@ fun AlbumScreen(
         onAddToPlaylist = requestAddToPlaylist,
         onDownload = { song ->
             vm.download(song)
+            onDownloadEnqueued()
             snackbar?.showMessage("Download queued")
         },
         onToggleFavorite = { song, isFav -> vm.toggleFavorite(song, isFav) },
@@ -102,6 +104,7 @@ fun PlaylistScreen(
     vm: DetailViewModel = hiltViewModel(),
     onPlayQueue: (List<Song>, Int) -> Unit,
     onBack: () -> Unit,
+    onDownloadEnqueued: () -> Unit = {},
 ) {
     LaunchedEffect(id) { vm.loadPlaylist(id) }
     val s by vm.playlist.collectAsState()
@@ -132,6 +135,7 @@ fun PlaylistScreen(
         onAddToPlaylist = requestAddToPlaylist,
         onDownload = { song ->
             vm.download(song)
+            onDownloadEnqueued()
             snackbar?.showMessage("Download queued")
         },
         onToggleFavorite = { song, isFav -> vm.toggleFavorite(song, isFav) },
@@ -395,6 +399,7 @@ fun ArtistScreen(
     onAlbum: (String) -> Unit,
     onPlayQueue: (List<Song>, Int) -> Unit,
     onBack: () -> Unit,
+    onDownloadEnqueued: () -> Unit = {},
 ) {
     LaunchedEffect(id) { vm.loadArtist(id) }
     val s by vm.artist.collectAsState()
@@ -461,6 +466,7 @@ fun ArtistScreen(
                             },
                             onDownload = { s2 ->
                                 vm.download(s2)
+                                onDownloadEnqueued()
                                 snackbar?.showMessage("Download queued")
                             },
                             onToggleFavorite = { s2, isFav -> vm.toggleFavorite(s2, isFav) },
@@ -485,6 +491,7 @@ fun ArtistScreen(
                             },
                             onDownload = { s2 ->
                                 vm.download(s2)
+                                onDownloadEnqueued()
                                 snackbar?.showMessage("Download queued")
                             },
                             onToggleFavorite = { s2, isFav -> vm.toggleFavorite(s2, isFav) },

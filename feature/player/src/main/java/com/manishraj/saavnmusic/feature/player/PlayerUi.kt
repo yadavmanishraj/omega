@@ -373,6 +373,7 @@ fun FullPlayer(
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope,
     artworkBoundsTransform: BoundsTransform,
+    onDownloadEnqueued: () -> Unit = {},
 ) {
     val st by vm.state.collectAsState()
     val cur = st.current
@@ -455,6 +456,7 @@ fun FullPlayer(
     val controls: @Composable () -> Unit = {
         PlayerControls(
             vm = vm,
+            onDownloadEnqueued = onDownloadEnqueued,
             st = st,
             cur = cur,
             isFavorite = fav,
@@ -659,6 +661,7 @@ private fun PlayerTopBar(
 @Composable
 private fun PlayerControls(
     vm: PlayerViewModel,
+    onDownloadEnqueued: () -> Unit,
     st: PlayerState,
     cur: Song,
     isFavorite: Boolean,
@@ -818,6 +821,7 @@ private fun PlayerControls(
                         cur,
                         vm.appSettings.value.downloadQuality,
                     )
+                    onDownloadEnqueued()
                 } else {
                     // State-aware (F-09): tapping the downloaded
                     // state says so instead of silently doing
