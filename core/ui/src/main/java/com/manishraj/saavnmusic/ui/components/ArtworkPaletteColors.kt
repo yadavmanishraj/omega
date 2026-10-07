@@ -186,6 +186,52 @@ private fun contentColorOn(background: Color): Color =
         Color.Black
     }
 
+/**
+ * The color a palette gradient may safely fade TO. Header/player
+ * content uses [ArtworkPaletteColors.onMutedDark] over the WHOLE
+ * gradient, but that color is only contrast-checked against
+ * mutedDark (the top). In a light theme the old end color — the
+ * theme background — is near-white, so lower content (Detail
+ * description, player title) washed out to invisibility (UI/UX
+ * Phase B audit, 2026-10-07). Here the background is pulled toward
+ * mutedDark just far enough that the content color keeps 4.5:1
+ * against the result: in dark themes the background already passes
+ * and the seamless fade is unchanged; in light themes the header
+ * becomes a dark band that still reads as the artwork's color.
+ */
+fun safeGradientEnd(
+    palette: ArtworkPaletteColors,
+    background: Color,
+): Color {
+    if (contrastRatio(palette.onMutedDark, background) >= MIN_TEXT_CONTRAST) {
+        return background
+    }
+    var low = 0f
+    var high = 1f
+    repeat(12) {
+        val mid = (low + high) / 2f
+        val blended = lerp(palette.mutedDark, background, mid)
+        if (contrastRatio(palette.onMutedDark, blended) >= MIN_TEXT_CONTRAST) {
+            low = mid
+        } else {
+            high = mid
+        }
+    }
+    return lerp(palette.mutedDark, background, low)
+}
+
+private fun lerp(
+    start: Color,
+    end: Color,
+    fraction: Float,
+): Color =
+    Color(
+        red = start.red + (end.red - start.red) * fraction,
+        green = start.green + (end.green - start.green) * fraction,
+        blue = start.blue + (end.blue - start.blue) * fraction,
+        alpha = start.alpha + (end.alpha - start.alpha) * fraction,
+    )
+
 private fun contrastRatio(
     first: Color,
     second: Color,

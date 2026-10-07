@@ -93,7 +93,6 @@ class SearchViewModel
             viewModelScope.launch {
                 songs.value = UiState.Loading
                 searchedQuery.value = q
-                if (recordRecent) repo.addRecentSearch(q)
                 try {
                     val global = repo.searchAll(q)
                     topResults.value = global.topSongs + global.songs
@@ -101,6 +100,10 @@ class SearchViewModel
                     albums.value = repo.searchAlbums(q)
                     artists.value = repo.searchArtists(q)
                     playlists.value = repo.searchPlaylists(q)
+                    // Only successful searches earn a Recents slot —
+                    // a failed query used to be committed before the
+                    // attempt (UI/UX Phase B audit).
+                    if (recordRecent) repo.addRecentSearch(q)
                 } catch (e: Exception) {
                     songs.value =
                         UiState.Error("Couldn't search right now. Check your connection, then retry.")

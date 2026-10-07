@@ -52,6 +52,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.data.repository.toSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
@@ -342,6 +343,8 @@ fun LibraryScreen(
                                                     listOf(d.artist, d.quality, formatBytes(d.sizeBytes), d.status)
                                                         .filter { it.isNotBlank() }
                                                         .joinToString(" • "),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
                                                     style = MaterialTheme.typography.bodyMedium,
                                                 )
                                                 if (d.status == "FAILED") {

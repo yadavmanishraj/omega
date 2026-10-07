@@ -77,6 +77,7 @@ import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
+import com.manishraj.saavnmusic.ui.components.safeGradientEnd
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
@@ -273,9 +274,17 @@ fun FullPlayer(
         animationSpec = tween(durationMillis = 300),
         label = "playerArtworkContent",
     )
+    // Fade end must keep the content color at 4.5:1 (see
+    // safeGradientEnd) — in light themes the title/artist washed
+    // out over the near-white background end (UI/UX Phase B audit).
+    val gradientEnd by animateColorAsState(
+        targetValue = safeGradientEnd(palette, MaterialTheme.colorScheme.background),
+        animationSpec = tween(durationMillis = 300),
+        label = "playerGradientEnd",
+    )
     val playerBrush =
         Brush.verticalGradient(
-            listOf(gradientTop, MaterialTheme.colorScheme.background),
+            listOf(gradientTop, gradientEnd),
         )
     var showQueue by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }

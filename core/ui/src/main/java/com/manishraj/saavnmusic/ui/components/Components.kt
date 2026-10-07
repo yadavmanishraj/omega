@@ -132,14 +132,28 @@ fun SongRow(
             )
         },
         supportingContent = {
-            Text(
-                listOf(song.artist, formatDuration(song.durationSec))
-                    .filter { it.isNotBlank() }
-                    .joinToString(" • "),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            // The duration gets a protected slot: as one joined
+            // string it was ellipsized away (or cut mid-value,
+            // "• 3:…") whenever the artist list ran long at large
+            // font scales (UI/UX Phase B audit). The artist text
+            // ellipsizes first; the duration never truncates.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val duration = formatDuration(song.durationSec)
+                Text(
+                    song.artist,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (duration.isNotBlank()) {
+                    Text(
+                        if (song.artist.isBlank()) duration else " • $duration",
+                        maxLines = 1,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
         },
         leadingContent = { Artwork(song.imageUrl, contentDescription = song.name) },
         trailingContent = trailing,
@@ -369,6 +383,16 @@ fun GradientHeader(
         animationSpec = tween(durationMillis = 300),
         label = "headerGradientTop",
     )
+    // The fade must end where the content color still passes 4.5:1 —
+    // fading straight to a light theme background made lower header
+    // text invisible (UI/UX Phase B audit). safeGradientEnd keeps
+    // the seamless fade in dark themes and a legible dark band in
+    // light ones.
+    val gradientEnd by animateColorAsState(
+        targetValue = safeGradientEnd(palette, MaterialTheme.colorScheme.background),
+        animationSpec = tween(durationMillis = 300),
+        label = "headerGradientEnd",
+    )
     val contentColor by animateColorAsState(
         targetValue = palette.onMutedDark,
         animationSpec = tween(durationMillis = 300),
@@ -381,7 +405,7 @@ fun GradientHeader(
                 Brush.verticalGradient(
                     listOf(
                         gradientTop,
-                        MaterialTheme.colorScheme.background,
+                        gradientEnd,
                     ),
                 ),
             ),
