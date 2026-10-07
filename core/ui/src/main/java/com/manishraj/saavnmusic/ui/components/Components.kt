@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -353,6 +355,7 @@ fun SectionHeader(
 @Composable
 fun GradientHeader(
     imageUrl: String?,
+    onBack: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     // Artwork-derived header (UIUX_DESIGN §3.1.3): the gradient runs
@@ -384,7 +387,20 @@ fun GradientHeader(
             ),
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Column(Modifier.padding(top = OmegaSpacing.lg)) { content() }
+            Column(Modifier.padding(top = OmegaSpacing.lg)) {
+                // Up affordance on pushed destinations (album /
+                // playlist / artist), tinted with the header's
+                // contrast-checked content color.
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
+                    }
+                }
+                content()
+            }
         }
     }
 }

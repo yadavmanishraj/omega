@@ -34,7 +34,6 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.Song
@@ -328,33 +326,25 @@ fun SearchScreen(
     }
 }
 
-/** Tab row that switches to scrollable before labels can compress (fontScale ≥ 1.6). */
+/** Result-type tabs: always scrollable (labels never compress) and
+ * with explicit content colors — unselected tabs de-emphasize to
+ * onSurfaceVariant; the primary color + indicator carry selection
+ * (UI/UX audit, 2026-10-07). */
 @Composable
 private fun SearchTabs(
     tab: Int,
     onSelect: (Int) -> Unit,
 ) {
     val labels = listOf("Songs", "Albums", "Artists", "Playlists")
-    val fontScale = LocalDensity.current.fontScale
-    if (fontScale >= 1.6f) {
-        ScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
-            labels.forEachIndexed { i, label ->
-                Tab(
-                    selected = tab == i,
-                    onClick = { onSelect(i) },
-                    text = { Text(label, maxLines = 1, softWrap = false) },
-                )
-            }
-        }
-    } else {
-        TabRow(selectedTabIndex = tab) {
-            labels.forEachIndexed { i, label ->
-                Tab(
-                    selected = tab == i,
-                    onClick = { onSelect(i) },
-                    text = { Text(label, maxLines = 1, softWrap = false) },
-                )
-            }
+    ScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
+        labels.forEachIndexed { i, label ->
+            Tab(
+                selected = tab == i,
+                onClick = { onSelect(i) },
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = { Text(label, maxLines = 1, softWrap = false) },
+            )
         }
     }
 }

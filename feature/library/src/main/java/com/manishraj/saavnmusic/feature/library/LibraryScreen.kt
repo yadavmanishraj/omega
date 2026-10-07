@@ -570,6 +570,8 @@ private fun LibraryTabs(
             Tab(
                 selected = tab == i,
                 onClick = { onSelect(i) },
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 text = { Text("$label · ${counts[i]}", maxLines = 1, softWrap = false) },
             )
         }

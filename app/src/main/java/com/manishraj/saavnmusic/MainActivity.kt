@@ -296,6 +296,7 @@ fun AppRoot() {
                                 AlbumScreen(
                                     it.arguments?.getString("id") ?: "",
                                     onPlayQueue = playQueue,
+                                    onBack = { nav.popBackStack() },
                                 )
                             }
                             composable(
@@ -305,6 +306,7 @@ fun AppRoot() {
                                 PlaylistScreen(
                                     it.arguments?.getString("id") ?: "",
                                     onPlayQueue = playQueue,
+                                    onBack = { nav.popBackStack() },
                                 )
                             }
                             composable(
@@ -315,6 +317,7 @@ fun AppRoot() {
                                     it.arguments?.getString("id") ?: "",
                                     onAlbum = { a -> nav.navigate("album/$a") },
                                     onPlayQueue = playQueue,
+                                    onBack = { nav.popBackStack() },
                                 )
                             }
                         }

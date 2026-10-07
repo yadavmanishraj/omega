@@ -3,6 +3,7 @@ package com.manishraj.saavnmusic.feature.detail
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -23,7 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,6 +48,7 @@ fun AlbumScreen(
     id: String,
     vm: DetailViewModel = hiltViewModel(),
     onPlayQueue: (List<Song>, Int) -> Unit,
+    onBack: () -> Unit,
 ) {
     LaunchedEffect(id) { vm.loadAlbum(id) }
     val s by vm.album.collectAsState()
@@ -52,7 +56,7 @@ fun AlbumScreen(
     DetailList(
         s,
         { it.songs },
-        { a -> SongListHeader(a.name, a.artist, a.imageUrl, a.description) },
+        { a -> SongListHeader(a.name, a.artist, a.imageUrl, a.description, onBack) },
         onPlayQueue,
         onAddToPlaylist = requestAddToPlaylist,
     ) { vm.loadAlbum(id) }
@@ -63,6 +67,7 @@ fun PlaylistScreen(
     id: String,
     vm: DetailViewModel = hiltViewModel(),
     onPlayQueue: (List<Song>, Int) -> Unit,
+    onBack: () -> Unit,
 ) {
     LaunchedEffect(id) { vm.loadPlaylist(id) }
     val s by vm.playlist.collectAsState()
@@ -70,7 +75,7 @@ fun PlaylistScreen(
     DetailList(
         s,
         { it.songs },
-        { p -> SongListHeader(p.name, "Playlist", p.imageUrl, p.description) },
+        { p -> SongListHeader(p.name, "Playlist", p.imageUrl, p.description, onBack) },
         onPlayQueue,
         onAddToPlaylist = requestAddToPlaylist,
     ) { vm.loadPlaylist(id) }
@@ -148,19 +153,38 @@ fun SongListHeader(
     subtitle: String,
     image: String?,
     desc: String?,
+    onBack: () -> Unit,
 ) {
-    GradientHeader(image) {
-        Column(Modifier.padding(16.dp)) {
+    GradientHeader(image, onBack) {
+        // Centered composition: left-aligned artwork left a wide
+        // empty tinted region beside it (UI/UX audit, 2026-10-07).
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Artwork(image, 180, OmegaRadius.xl)
             Spacer(Modifier.height(12.dp))
-            Text(title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
             if (!desc.isNullOrBlank()) {
                 Text(
                     desc,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -173,6 +197,7 @@ fun ArtistScreen(
     vm: DetailViewModel = hiltViewModel(),
     onAlbum: (String) -> Unit,
     onPlayQueue: (List<Song>, Int) -> Unit,
+    onBack: () -> Unit,
 ) {
     LaunchedEffect(id) { vm.loadArtist(id) }
     val s by vm.artist.collectAsState()
@@ -188,6 +213,7 @@ fun ArtistScreen(
                         listOfNotNull(a.data.followers?.let { "$it followers" }).joinToString(),
                         a.data.imageUrl,
                         a.data.bio,
+                        onBack,
                     )
                 }
                 item { SectionHeader("Top songs") }
