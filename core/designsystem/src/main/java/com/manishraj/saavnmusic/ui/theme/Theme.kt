@@ -61,7 +61,14 @@ object OmegaSpacing {
     val xxxl = 48.dp
 }
 
-/** Corner radii (spec §2.4): row artwork 8, cards 12, hero 16, sheets/dialogs 24. */
+/**
+ * Corner radii — the raw scale behind [OmegaShapes]. Role mapping
+ * (M3 Expressive spec §2.3): row artwork medium (12), cards large
+ * (16), hero extraLarge (28); the 4/8 steps serve small inner
+ * elements, the 24 step dialog/sheet-class corners. (The scale this
+ * KDoc previously printed — rows 8, cards 12, hero 16 — was the
+ * superseded REDESIGN_SPEC mapping, not the values in use.)
+ */
 object OmegaRadius {
     val sm = 4.dp
     val md = 8.dp
@@ -101,6 +108,14 @@ private val DarkColors =
         onSecondary = Color(0xFF1E1B4B),
         secondaryContainer = Color(0xFF1E1B4B),
         onSecondaryContainer = Color(0xFFE0E7FF),
+        // Tertiary family (spec §1.4): the artwork teal, lifted to
+        // dark-scheme tone — the brightened sibling of the artwork
+        // fallback vibrant #1B7A64; on/container tones derive from
+        // the same hue (deep fallback teal #0E3B33 as the on-color).
+        tertiary = Color(0xFF3ED6A5),
+        onTertiary = Color(0xFF0E3B33),
+        tertiaryContainer = Color(0xFF134E3E),
+        onTertiaryContainer = Color(0xFFB9F2DF),
         background = Color(0xFF0F0F23),
         onBackground = Color(0xFFF8FAFC),
         surface = Color(0xFF12122B),
@@ -110,6 +125,12 @@ private val DarkColors =
         surfaceContainerHighest = Color(0xFF27273B),
         outline = Color(0xFF312E81),
         outlineVariant = Color(0xFF27273B),
+        // Inverse roles mirror the LIGHT scheme (R-P8): its surface,
+        // its onSurface, its primary — so inverse consumers resolve
+        // brand values, never baseline Material ones.
+        inverseSurface = Color(0xFFFFFFFF),
+        inverseOnSurface = Color(0xFF0F172A),
+        inversePrimary = Color(0xFF15803D),
         error = Color(0xFFEF4444),
         onError = Color(0xFF000000),
         scrim = Color(0x99000000),
@@ -125,6 +146,14 @@ private val LightColors =
         onSecondary = Color(0xFFFFFFFF),
         secondaryContainer = Color(0xFFE0E7FF),
         onSecondaryContainer = Color(0xFF1E1B4B),
+        // Tertiary family (spec §1.4): the artwork fallback vibrant
+        // itself (#1B7A64, the teal side of the artwork palette);
+        // container is its pale tint, on-container the deep fallback
+        // teal #0E3B33.
+        tertiary = Color(0xFF1B7A64),
+        onTertiary = Color(0xFFFFFFFF),
+        tertiaryContainer = Color(0xFFC9EFE1),
+        onTertiaryContainer = Color(0xFF0E3B33),
         background = Color(0xFFF8FAFC),
         onBackground = Color(0xFF0F172A),
         surface = Color(0xFFFFFFFF),
@@ -134,6 +163,11 @@ private val LightColors =
         surfaceContainerHighest = Color(0xFFE8EAF3),
         outline = Color(0xFF94A3B8),
         outlineVariant = Color(0xFFCBD5E1),
+        // Inverse roles mirror the DARK scheme (R-P8): its surface,
+        // its onSurface, its primary.
+        inverseSurface = Color(0xFF12122B),
+        inverseOnSurface = Color(0xFFF8FAFC),
+        inversePrimary = Color(0xFF3BE477),
         error = Color(0xFFDC2626),
         onError = Color(0xFFFFFFFF),
         scrim = Color(0x99000000),
@@ -143,8 +177,10 @@ private val LightColors =
  * Type scale per spec §2.2 (Righteous display / Poppins body roles), plus the
  * Material 3 Expressive `…Emphasized` twins for all 15 styles (M3 Expressive
  * spec §2.2): same family and size as the baseline style, one weight step up
- * (400→500, 500→700, 600→700). Defined for the redesign waves — screens do
- * not consume the emphasized styles yet. Righteous ships a single weight, so
+ * (400→500, 500→700, 600→700). The twins ARE consumed where §2.2 assigns
+ * them — section headers (titleMediumEmphasized), Detail and local-playlist
+ * header titles, the player title, the Home greeting — while rows and body
+ * text stay baseline. Righteous ships a single weight, so
  * its emphasized twins resolve to the same glyphs with the stepped weight
  * recorded in the style.
  */

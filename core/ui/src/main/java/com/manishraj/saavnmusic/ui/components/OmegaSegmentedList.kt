@@ -4,9 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -33,6 +36,47 @@ fun OmegaSegmentedList(
         verticalArrangement = Arrangement.spacedBy(2.dp),
         content = content,
     )
+}
+
+/**
+ * Free-form segmented container (polish item 13): the segment
+ * surface — surfaceContainerHigh fill, large shape — hosting
+ * arbitrary content that [OmegaSegmentedListItem]'s
+ * headline/supporting/trailing slots can't express (a label over a
+ * choice group, a full [SongRow], a progress row). This is the one
+ * implementation of the treatment Settings and Library previously
+ * hand-rolled per screen.
+ *
+ * Content is laid out in a [Column]; [contentPadding] defaults to
+ * zero because row content (ListItem, SongRow) carries its own
+ * padding — free-standing blocks (Settings groups) pass
+ * `PaddingValues(OmegaSpacing.lg)`. Separate containers stack with
+ * the kit's 2dp gap via [OmegaSegmentedList]; grouping is carried by
+ * containment, not dividers, inside a container too.
+ *
+ * ```
+ * OmegaSegmentedContainer(Modifier.fillMaxWidth()) {
+ *     Text("Appearance", style = MaterialTheme.typography.titleMedium)
+ *     OmegaChoiceGroup(...)
+ * }
+ * ```
+ */
+@Composable
+fun OmegaSegmentedContainer(
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier,
+    ) {
+        Column(
+            Modifier.padding(contentPadding),
+            content = content,
+        )
+    }
 }
 
 /**

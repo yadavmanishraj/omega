@@ -228,7 +228,7 @@ fun HomeScreen(
                                 .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
                     ) {
                         Column {
-                            SectionHeader("Jump back in", emphasized = true)
+                            SectionHeader("Jump back in")
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = OmegaSpacing.sm),
                             ) {

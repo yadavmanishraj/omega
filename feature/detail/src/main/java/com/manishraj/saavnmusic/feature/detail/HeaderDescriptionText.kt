@@ -2,17 +2,21 @@ package com.manishraj.saavnmusic.feature.detail
 
 /**
  * Cleans a Detail header description for display (impeccable
- * critique fix, P2). Upstream hands the header ONE baked string —
- * `RawMappers` copies `headerDesc` verbatim into
- * `Album.description` / `Playlist.description` — and that string
- * carries the data layer's mess with it: album headers repeat the
- * subtitle's artist enumeration as a trailing segment
+ * critique fix, P2). Upstream hands the header ONE baked string:
+ * `RawMappers` maps `headerDesc` into `Album.description` /
+ * `Playlist.description`, normalizing its whitespace on the way
+ * in (space runs collapsed per line, lines trimmed, sane prose
+ * byte-identical — the F-03 fix in :core:network, after a
+ * 136-space run sheared a playlist header). What normalization
+ * cannot fix is the string's editorial mess: album headers repeat
+ * the subtitle's artist enumeration as a trailing segment
  * ("2013 · Hindi Album · Jeet Gannguli, Mithoon, and Ankit Tiwari"
  * under the subtitle "Jeet Gannguli, Mithoon, and Ankit Tiwari"),
  * and playlist "descriptions" can be pure credit metadata
  * ("Artists On Cover: Sidharth Malhotra & Kiara Advani"). There is
  * no structured form below this layer to fix instead, so the
- * cleanup lives where the header is assembled for display.
+ * credit/dedupe cleanup lives where the header is assembled for
+ * display.
  *
  * Rules, applied per "·"-separated segment:
  * - Credit segments are dropped: a segment that starts a credit

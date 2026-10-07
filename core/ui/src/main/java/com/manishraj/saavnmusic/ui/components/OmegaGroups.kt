@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
 /**
  * Font scale at/above which [OmegaChoiceGroup]'s wrap arrangement
@@ -62,8 +62,8 @@ fun <T> OmegaChoiceGroup(
     if (wrapAtLargeFont && LocalDensity.current.fontScale >= LARGE_FONT_WRAP_THRESHOLD) {
         FlowRow(
             modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
         ) {
             options.forEach { option ->
                 FilterChip(

@@ -42,6 +42,7 @@ import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.CircularArtwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.GradientHeader
@@ -56,12 +57,15 @@ import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.components.compactCount
 import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.LocalReducedMotion
+import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
 /**
- * Corner for the Detail header artwork: the shape language's
- * extraLarge slot (28dp — `OmegaShapes.extraLarge`, spec §2.3),
- * matching the player hero. [Artwork] takes a Dp corner, so the
- * value is spelled out here; the two must move together.
+ * Corner for the album/playlist Detail header artwork: the shape
+ * language's extraLarge slot (28dp — `OmegaShapes.extraLarge`,
+ * spec §2.3), matching the player hero. [Artwork] takes a Dp
+ * corner, so the value is spelled out here; the two must move
+ * together. Artist headers don't use it — artists render circular
+ * (see [SongListHeader]).
  */
 private val HeaderArtworkCorner = 28.dp
 
@@ -261,7 +265,7 @@ fun <T> DetailList(
                             secondaryIcon = Icons.Filled.Shuffle,
                             modifier =
                                 Modifier
-                                    .padding(16.dp)
+                                    .padding(OmegaSpacing.lg)
                                     .horizontalScroll(rememberScrollState()),
                         )
                     }
@@ -270,6 +274,9 @@ fun <T> DetailList(
                     // list change animates the WRONG rows. Indexed
                     // section-prefixed keys — bare song ids are NOT
                     // unique within a list upstream.
+                    // Family rule (deliberate, not drift): Detail-
+                    // family lists are flat SongRows; Library-family
+                    // lists are segmented.
                     itemsIndexed(
                         list,
                         key = { index, song -> "song-$index-${song.id}" },
@@ -303,6 +310,7 @@ fun SongListHeader(
     image: String?,
     desc: String?,
     onBack: () -> Unit,
+    circularArtwork: Boolean = false,
 ) {
     GradientHeader(image, onBack) {
         // Centered composition: left-aligned artwork left a wide
@@ -310,11 +318,19 @@ fun SongListHeader(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(OmegaSpacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Artwork(image, 180, HeaderArtworkCorner)
-            Spacer(Modifier.height(12.dp))
+            // Artists are circles on every surface that lists them
+            // (spec §2.3: one artist shape family app-wide), so the
+            // artist header takes the kit's circular variant;
+            // albums/playlists keep the square 28dp-corner hero.
+            if (circularArtwork) {
+                CircularArtwork(image, 180)
+            } else {
+                Artwork(image, 180, HeaderArtworkCorner)
+            }
+            Spacer(Modifier.height(OmegaSpacing.md))
             Text(
                 title,
                 // Emphasized twin of the slot the header already
@@ -375,18 +391,21 @@ private fun HeaderDescription(text: String) {
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
         onTextLayout = { overflows = it.hasVisualOverflow },
-        // Bounded to the header's padded content box (F-03): this
-        // was the one header text with NO width constraint of its
-        // own, and an unconstrained centered paragraph in the
-        // gradient column laid out over-wide — its first glyphs
-        // landed off the left screen edge ("ongs in Hindi.") while
-        // every sibling text (all width-bounded) rendered centered
-        // correctly. fillMaxWidth + the horizontal inset pin the
-        // paragraph to the same box as the title above it.
+        // Bounded to the header's padded content box — fillMaxWidth
+        // + the horizontal inset pin the paragraph to the same box
+        // as the title above it. (The F-03 shearing once blamed on
+        // this paragraph having no width constraint of its own was
+        // actually upstream data: a 136-space run in header_desc
+        // that the line breaker hung on the first line, so the
+        // centered paragraph centered sentence + spaces by their
+        // full advance width and the sentence sheared off the left
+        // edge. Fixed at ingestion in :core:network, which now
+        // normalizes description whitespace; this constraint stays
+        // as the paragraph's ordinary box, not as the F-03 fix.)
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = OmegaSpacing.xl)
                 .animateContentSize(sizeSpec),
     )
     if (overflows || expanded) {
@@ -433,7 +452,24 @@ fun ArtistScreen(
                         a.data.imageUrl,
                         a.data.bio,
                         onBack,
+                        circularArtwork = true,
                     )
+                }
+                // An artist can come back with no music at all —
+                // every F-14 section below stays silent, so close
+                // the state matrix with the shared empty state
+                // under the header, the way Album/Playlist do. The
+                // header's Back arrow stays the way out.
+                if (a.data.topSongs.isEmpty() &&
+                    a.data.singles.isEmpty() &&
+                    a.data.topAlbums.isEmpty()
+                ) {
+                    item {
+                        EmptyState(
+                            title = "Nothing here yet",
+                            subtitle = "No music from ${a.data.name} on JioSaavn yet.",
+                        )
+                    }
                 }
                 // Sections render ONLY when they have content
                 // (F-14): the headers used to be unconditional, so
@@ -454,7 +490,7 @@ fun ArtistScreen(
                             secondaryIcon = Icons.Filled.Shuffle,
                             modifier =
                                 Modifier
-                                    .padding(16.dp)
+                                    .padding(OmegaSpacing.lg)
                                     .horizontalScroll(rememberScrollState()),
                         )
                     }
