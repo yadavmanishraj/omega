@@ -1,6 +1,7 @@
 package com.manishraj.saavnmusic.ui.theme
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,7 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleOwner
 
 /**
  * Reduced motion (M3 Expressive spec §2.5): a BINARY model driven by the
@@ -40,18 +41,23 @@ private fun readAnimatorDurationScale(context: Context): Float =
         1f,
     )
 
+/** The hosting activity's lifecycle, unwrapped from the context
+ * chain; null in previews / headless compositions (the provider then
+ * keeps its first-composition read). Reading a CompositionLocal
+ * lifecycle owner defensively isn't an option — the Compose compiler
+ * forbids try/catch around composable invocations. */
+private tailrec fun Context.findLifecycleOwner(): LifecycleOwner? =
+    when {
+        this is LifecycleOwner -> this
+        this is ContextWrapper -> baseContext.findLifecycleOwner()
+        else -> null
+    }
+
 @Composable
 fun ProvideReducedMotion(content: @Composable () -> Unit) {
     val context = LocalContext.current
     var animatorScale by remember { mutableStateOf(readAnimatorDurationScale(context)) }
-    // Previews and headless compositions may have no lifecycle owner;
-    // fall back to the value read at first composition there.
-    val lifecycleOwner =
-        try {
-            LocalLifecycleOwner.current
-        } catch (e: IllegalStateException) {
-            null
-        }
+    val lifecycleOwner = remember(context) { context.findLifecycleOwner() }
     DisposableEffect(lifecycleOwner, context) {
         if (lifecycleOwner == null) {
             onDispose { }

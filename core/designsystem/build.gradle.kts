@@ -13,5 +13,4 @@ dependencies {
 
     // ProvideReducedMotion re-reads the animator scale on ON_RESUME.
     implementation(libs.androidx.lifecycle.runtime)
-    implementation(libs.androidx.lifecycle.runtime.compose)
 }
