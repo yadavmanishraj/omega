@@ -2,6 +2,7 @@ package com.manishraj.saavnmusic
 
 import com.manishraj.saavnmusic.data.remote.cleanedLyrics
 import com.manishraj.saavnmusic.data.remote.dto.RawAlbumDto
+import com.manishraj.saavnmusic.data.remote.dto.RawArtistPageDto
 import com.manishraj.saavnmusic.data.remote.dto.RawBrowseModulesDto
 import com.manishraj.saavnmusic.data.remote.dto.RawGlobalSearchDto
 import com.manishraj.saavnmusic.data.remote.dto.RawLyricsDto
@@ -11,6 +12,7 @@ import com.manishraj.saavnmusic.data.remote.dto.RawSongDto
 import com.manishraj.saavnmusic.data.remote.dto.RawStationEntryDto
 import com.manishraj.saavnmusic.data.remote.toDomain
 import com.manishraj.saavnmusic.data.remote.toHomeContent
+import com.manishraj.saavnmusic.domain.TopResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import org.junit.Assert.assertEquals
@@ -169,10 +171,68 @@ class UpstreamParsingTest {
              "episodes":{"data":[],"position":5},"shows":{"data":[],"position":6}}
             """.trimIndent()
         val result = json.decodeFromString<RawGlobalSearchDto>(fixture).toDomain()
-        assertEquals("Arijit Singh Hits", result.topSongs.single().name)
-        assertNull(result.topSongs.single().streamUrl)
+        val top = result.topResults.single()
+        assertTrue(top is TopResult.SongResult)
+        assertEquals("Arijit Singh Hits", (top as TopResult.SongResult).song.name)
+        assertNull(top.song.streamUrl)
         assertEquals("Mithoon", result.albums.single().artist)
         assertEquals("Arijit Singh", result.artists.single().name)
+    }
+
+    @Test
+    fun globalSearchTopQueryKeepsEntityTypes() {
+        // Regression (A17 audit F-02): topquery is mixed-type. An
+        // artist top hit used to be force-mapped to a Song carrying
+        // the ARTIST id — the row rendered as a song, its tap tried
+        // to resolve the artist id as a song, failed silently, and
+        // the highest-traffic row in Search was a dead control.
+        val fixture =
+            """
+            {"topquery":{"data":[
+                {"id":"art1","title":"Arijit Singh","type":"artist","image":"https://c.saavncdn.com/a-150x150.jpg"},
+                {"id":"al1","title":"Aashiqui 2","type":"album","image":"https://c.saavncdn.com/x-150x150.jpg",
+                 "more_info":{"music":"Mithoon","year":"2013"}},
+                {"id":"pl1","title":"Romance Hits","type":"playlist","image":"https://c.saavncdn.com/p-150x150.jpg"},
+                {"id":"","title":"Id-less","type":"artist"}
+            ],"position":0},
+             "songs":{"data":[],"position":1},
+             "albums":{"data":[],"position":2},
+             "artists":{"data":[],"position":3},
+             "playlists":{"data":[],"position":4}}
+            """.trimIndent()
+        val result = json.decodeFromString<RawGlobalSearchDto>(fixture).toDomain()
+        // The id-less item is dropped: never render a row that
+        // cannot be acted on.
+        assertEquals(3, result.topResults.size)
+        val artist = result.topResults[0]
+        assertTrue(artist is TopResult.ArtistResult)
+        assertEquals("art1", artist.id)
+        assertEquals("Arijit Singh", (artist as TopResult.ArtistResult).artist.name)
+        val album = result.topResults[1]
+        assertTrue(album is TopResult.AlbumResult)
+        assertEquals("al1", album.id)
+        assertEquals("Mithoon", (album as TopResult.AlbumResult).album.artist)
+        val playlist = result.topResults[2]
+        assertTrue(playlist is TopResult.PlaylistResult)
+        assertEquals("pl1", playlist.id)
+    }
+
+    @Test
+    fun artistPageMapsSingles() {
+        // Regression (A17 audit F-14): the artist DTO parsed
+        // `singles` but the domain mapper dropped them, so a whole
+        // catalogue slice never reached the artist screen.
+        val fixture =
+            """
+            {"artistId":"art1","name":"Arijit Singh","follower_count":"107959415",
+             "topSongs":[{"id":"s1","title":"Tum Hi Ho"}],
+             "topAlbums":[{"id":"al1","title":"Aashiqui 2"}],
+             "singles":[{"id":"sg1","title":"Single One"},{"id":"sg2","title":"Single Two"}]}
+            """.trimIndent()
+        val artist = json.decodeFromString<RawArtistPageDto>(fixture).toDomain(json)
+        assertEquals(listOf("sg1", "sg2"), artist.singles.map { it.id })
+        assertEquals(listOf("Single One", "Single Two"), artist.singles.map { it.name })
+        assertEquals(listOf("s1"), artist.topSongs.map { it.id })
     }
 
     @Test

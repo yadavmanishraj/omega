@@ -1,6 +1,8 @@
 package com.manishraj.saavnmusic.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -9,12 +11,24 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ButtonShapes
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+
+/**
+ * Font scale at/above which [OmegaChoiceGroup]'s wrap arrangement
+ * takes over when a caller opts in: between the user's everyday
+ * 1.33 (where the connected group + overflow menu works) and the
+ * 2.0 maximum, where the A17 audit (F-23) found groups collapsing
+ * into the overflow menu until NO selection was visible.
+ */
+private const val LARGE_FONT_WRAP_THRESHOLD = 1.6f
 
 /**
  * Single-choice connected button group (M3 Expressive spec §3):
@@ -26,8 +40,15 @@ import androidx.compose.ui.text.style.TextOverflow
  * (and [OmegaActionGroup] below) so the alpha surface lives in one
  * place; the legacy segmented buttons / choice chip rows are
  * deprecated under Expressive — Wave 2 swaps the call sites to these.
+ *
+ * [wrapAtLargeFont] is the caller's opt-in escape for surfaces where
+ * a hidden selection is a correctness problem (Settings, F-23): at
+ * very large font scales the group renders as wrapping filter chips
+ * instead — every option stays visible, so the checked one can
+ * never hide inside the overflow menu. Compact in-context groups
+ * (player speed) keep the default overflow behavior.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun <T> OmegaChoiceGroup(
     options: List<T>,
@@ -36,7 +57,28 @@ fun <T> OmegaChoiceGroup(
     label: (T) -> String,
     modifier: Modifier = Modifier,
     icon: ((T) -> ImageVector)? = null,
+    wrapAtLargeFont: Boolean = false,
 ) {
+    if (wrapAtLargeFont && LocalDensity.current.fontScale >= LARGE_FONT_WRAP_THRESHOLD) {
+        FlowRow(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            options.forEach { option ->
+                FilterChip(
+                    selected = option == selected,
+                    onClick = { if (option != selected) onSelect(option) },
+                    label = { Text(label(option), maxLines = 1, softWrap = false) },
+                    leadingIcon =
+                        icon?.let { iconFor ->
+                            { Icon(iconFor(option), contentDescription = null) }
+                        },
+                )
+            }
+        }
+        return
+    }
     ButtonGroup(
         overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState) },
         modifier = modifier,

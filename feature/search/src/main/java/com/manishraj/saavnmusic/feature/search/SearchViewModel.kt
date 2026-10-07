@@ -10,6 +10,7 @@ import com.manishraj.saavnmusic.domain.Album
 import com.manishraj.saavnmusic.domain.Artist
 import com.manishraj.saavnmusic.domain.Playlist
 import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.domain.TopResult
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.playback.InsertNextResult
@@ -46,7 +47,11 @@ class SearchViewModel
         val albums = MutableStateFlow<List<Album>>(emptyList())
         val artists = MutableStateFlow<List<Artist>>(emptyList())
         val playlists = MutableStateFlow<List<Playlist>>(emptyList())
-        val topResults = MutableStateFlow<List<Song>>(emptyList())
+
+        /** Mixed-type top results (F-02): entity-typed, never Songs —
+         * the screen dispatches each variant to its own navigation,
+         * exactly like the category tabs. */
+        val topResults = MutableStateFlow<List<TopResult>>(emptyList())
 
         /** The last submitted/searched query; blank means the idle state. */
         val searchedQuery = MutableStateFlow("")
@@ -180,7 +185,8 @@ class SearchViewModel
                     playlists.value = emptyList()
                     try {
                         val global = repo.searchAll(q)
-                        topResults.value = global.topSongs + global.songs
+                        topResults.value =
+                            global.topResults + global.songs.map { TopResult.SongResult(it) }
                         songs.value = UiState.Success(repo.searchSongs(q))
                         albums.value = repo.searchAlbums(q)
                         artists.value = repo.searchArtists(q)

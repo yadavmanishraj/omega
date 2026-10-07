@@ -20,7 +20,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -48,11 +50,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.domain.TopResult
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.playback.InsertNextResult
+import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.CircularArtwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
@@ -165,10 +170,59 @@ fun SearchScreen(
         }
 
         if (isIdle) {
-            // Idle groups are contained blocks (spec §5): recents and
-            // starters read as two grouped surfaces on the container-
-            // low role, not loose chips on the flat background.
-            if (recent.isNotEmpty()) {
+            // The idle column SCROLLS (A17 audit F-12): at font 2.0
+            // the field + cards grow past the fold, and a fixed
+            // column left everything below it unreachable. Every
+            // other fragile surface survives 2.0 precisely because
+            // it scrolls.
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // Idle groups are contained blocks (spec §5): recents and
+                // starters read as two grouped surfaces on the container-
+                // low role, not loose chips on the flat background.
+                if (recent.isNotEmpty()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(OmegaRadius.xl),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+                    ) {
+                        Column(Modifier.padding(OmegaSpacing.md)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Recent searches",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = { vm.clearRecent() }) { Text("Clear all") }
+                            }
+                            // FlowRow: chips wrap the collection to the
+                            // next line before any label is compressed
+                            // (chip-reflow rule).
+                            FlowRow(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                                verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                            ) {
+                                recent.forEach { q ->
+                                    RecentChip(
+                                        query = q,
+                                        onClick = { vm.search(q) },
+                                        onRemove = { vm.removeRecent(q) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                     shape = RoundedCornerShape(OmegaRadius.xl),
@@ -178,69 +232,37 @@ fun SearchScreen(
                             .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
                 ) {
                     Column(Modifier.padding(OmegaSpacing.md)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Recent searches",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { vm.clearRecent() }) { Text("Clear all") }
-                        }
-                        // FlowRow: chips wrap the collection to the
-                        // next line before any label is compressed
-                        // (chip-reflow rule).
+                        Text(
+                            "Try",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Spacer(Modifier.height(OmegaSpacing.sm))
                         FlowRow(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
                             verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
                         ) {
-                            recent.forEach { q ->
-                                RecentChip(
-                                    query = q,
-                                    onClick = { vm.search(q) },
-                                    onRemove = { vm.removeRecent(q) },
+                            listOf("Arijit Singh", "Lo-fi beats", "Punjabi hits", "Old Bollywood").forEach { starter ->
+                                AssistChip(
+                                    onClick = { vm.search(starter) },
+                                    label = { Text(starter, maxLines = 1, softWrap = false) },
                                 )
                             }
                         }
                     }
                 }
-            }
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(OmegaRadius.xl),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
-            ) {
-                Column(Modifier.padding(OmegaSpacing.md)) {
-                    Text(
-                        "Try",
-                        style = MaterialTheme.typography.titleMedium,
+                // The illustration block only earns its space when
+                // there is nothing else to show (F-12): with recents
+                // present it was a third stacked block pushing content
+                // off the fold for no information.
+                if (recent.isEmpty()) {
+                    EmptyState(
+                        title = "Search for music",
+                        subtitle = "Songs, albums, artists and playlists — no account needed.",
+                        icon = Icons.Filled.Search,
                     )
-                    Spacer(Modifier.height(OmegaSpacing.sm))
-                    FlowRow(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-                        verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-                    ) {
-                        listOf("Arijit Singh", "Lo-fi beats", "Punjabi hits", "Old Bollywood").forEach { starter ->
-                            AssistChip(
-                                onClick = { vm.search(starter) },
-                                label = { Text(starter, maxLines = 1, softWrap = false) },
-                            )
-                        }
-                    }
                 }
             }
-            EmptyState(
-                title = "Search for music",
-                subtitle = "Songs, albums, artists and playlists — no account needed.",
-                icon = Icons.Filled.Search,
-            )
             return@Column
         }
 
@@ -253,7 +275,19 @@ fun SearchScreen(
             return@Column
         }
 
-        SearchTabs(tab = tab, onSelect = { vm.tab.value = it })
+        // Tab labels carry their result counts (F-20), in the same
+        // grammar Library's tabs use — one glance gives per-tab scope.
+        SearchTabs(
+            tab = tab,
+            counts =
+                listOf(
+                    (songs as? UiState.Success)?.data?.size ?: 0,
+                    albums.size,
+                    artists.size,
+                    playlists.size,
+                ),
+            onSelect = { vm.tab.value = it },
+        )
 
         when (tab) {
             0 ->
@@ -272,29 +306,69 @@ fun SearchScreen(
                                     topResults.take(3),
                                     key = { index, item -> "top-$index-${item.id}" },
                                 ) { _, item ->
-                                    val itemIsFavorite = favorites.any { it.id == item.id }
                                     Box(Modifier.animateItem()) {
-                                        SongRow(
-                                            item,
-                                            { vm.resolveAndPlay(item, onPlayQueue) },
-                                            trailing = {
-                                                SongOverflowMenuButton(
-                                                    song = item,
-                                                    isFavorite = itemIsFavorite,
-                                                    onPlayNext = {
-                                                        snackbar?.showMessage(
-                                                            playNextMessage(vm.playNext(item), item.name),
+                                        // Top results are entity-TYPED
+                                        // (F-02): songs play; artists /
+                                        // albums / playlists navigate,
+                                        // exactly like their tabs. The
+                                        // pre-fix code rendered every
+                                        // item as a Song, so an artist
+                                        // top hit was a dead row whose
+                                        // tap resolved the artist id as
+                                        // a song and silently failed.
+                                        when (item) {
+                                            is TopResult.SongResult -> {
+                                                val song = item.song
+                                                val itemIsFavorite = favorites.any { it.id == song.id }
+                                                SongRow(
+                                                    song,
+                                                    { vm.resolveAndPlay(song, onPlayQueue) },
+                                                    trailing = {
+                                                        SongOverflowMenuButton(
+                                                            song = song,
+                                                            isFavorite = itemIsFavorite,
+                                                            onPlayNext = {
+                                                                snackbar?.showMessage(
+                                                                    playNextMessage(vm.playNext(song), song.name),
+                                                                )
+                                                            },
+                                                            onDownload = {
+                                                                vm.download(song)
+                                                                snackbar?.showMessage("Download queued")
+                                                            },
+                                                            onToggleFavorite = {
+                                                                vm.toggleFavorite(song, itemIsFavorite)
+                                                            },
+                                                            onAddToPlaylist = { playlistTarget = song },
                                                         )
                                                     },
-                                                    onDownload = {
-                                                        vm.download(item)
-                                                        snackbar?.showMessage("Download queued")
-                                                    },
-                                                    onToggleFavorite = { vm.toggleFavorite(item, itemIsFavorite) },
-                                                    onAddToPlaylist = { playlistTarget = item },
                                                 )
-                                            },
-                                        )
+                                            }
+                                            is TopResult.ArtistResult ->
+                                                TopEntityRow(
+                                                    title = item.artist.name,
+                                                    subtitle = "Artist",
+                                                    imageUrl = item.artist.imageUrl,
+                                                    circular = true,
+                                                    onClick = { onArtist(item.artist.id) },
+                                                )
+                                            is TopResult.AlbumResult ->
+                                                TopEntityRow(
+                                                    title = item.album.name,
+                                                    subtitle = item.album.artist.ifBlank { "Album" },
+                                                    imageUrl = item.album.imageUrl,
+                                                    circular = false,
+                                                    onClick = { onAlbum(item.album.id) },
+                                                )
+                                            is TopResult.PlaylistResult ->
+                                                TopEntityRow(
+                                                    title = item.playlist.name,
+                                                    subtitle = "Playlist",
+                                                    imageUrl = item.playlist.imageUrl,
+                                                    circular = false,
+                                                    onClick = { onPlaylist(item.playlist.id) },
+                                                )
+                                        }
                                     }
                                 }
                                 item { SectionHeader("Songs") }
@@ -349,7 +423,12 @@ fun SearchScreen(
                         }
                     else ->
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
+                            // Adaptive, not Fixed(2) (F-13): phone
+                            // portrait still computes 2 columns at a
+                            // 160dp minimum, while ≥600dp / landscape
+                            // fit more columns instead of inflating
+                            // two giant posters.
+                            columns = GridCells.Adaptive(minSize = 160.dp),
                             modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
                         ) {
                             items(albums) { a ->
@@ -399,7 +478,7 @@ fun SearchScreen(
                         }
                     else ->
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
+                            columns = GridCells.Adaptive(minSize = 160.dp),
                             modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
                         ) {
                             items(playlists) { p ->
@@ -462,19 +541,64 @@ private fun SearchLoading() {
 @Composable
 private fun SearchTabs(
     tab: Int,
+    counts: List<Int>,
     onSelect: (Int) -> Unit,
 ) {
     val labels = listOf("Songs", "Albums", "Artists", "Playlists")
     PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
         labels.forEachIndexed { i, label ->
+            val count = counts.getOrElse(i) { 0 }
             Tab(
                 selected = tab == i,
                 onClick = { onSelect(i) },
                 selectedContentColor = MaterialTheme.colorScheme.primary,
                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                text = { Text(label, maxLines = 1, softWrap = false) },
+                text = {
+                    Text(
+                        if (count > 0) "$label · $count" else label,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                },
             )
         }
+    }
+}
+
+/**
+ * Row for a non-song top result (F-02): the same ListItem grammar as
+ * the Artists tab — artwork, name, type line, the whole row
+ * navigates. Deliberately NO overflow button: entity rows have no
+ * song menu, and the inert ⋮ was part of what made the old
+ * force-mapped rows read as broken songs.
+ */
+@Composable
+private fun TopEntityRow(
+    title: String,
+    subtitle: String,
+    imageUrl: String?,
+    circular: Boolean,
+    onClick: () -> Unit,
+) {
+    ListItem(
+        supportingContent = {
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
+        },
+        leadingContent = {
+            if (circular) {
+                CircularArtwork(imageUrl, contentDescription = title)
+            } else {
+                Artwork(imageUrl, contentDescription = title)
+            }
+        },
+        modifier = Modifier.clickable { onClick() },
+    ) {
+        Text(
+            title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium,
+        )
     }
 }
 
