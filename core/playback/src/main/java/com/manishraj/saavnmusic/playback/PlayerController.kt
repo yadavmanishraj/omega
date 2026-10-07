@@ -407,6 +407,56 @@ data class PlayerState(
         }
 
         /**
+         * Removes the queue item at [index] (the queue sheet's
+         * per-row Remove) and mirrors the removal in
+         * [PlayerState.queue]. Indices follow the same queue-index
+         * convention as [playIndex] and [insertNext]. Removing the
+         * CURRENT item lands playback on the item that slides into
+         * its slot (or the new last item) via the engine's own
+         * remove semantics, and removing the only item empties the
+         * player entirely. With a restored session pending (F-16)
+         * the engine timeline doesn't exist yet; the removal lives
+         * in state and is honored when the timeline is built from
+         * the published queue at materialization. Returns false
+         * when [index] doesn't address an item.
+         */
+        fun removeFromQueue(index: Int): Boolean {
+            val st = _state.value
+            val timelineIndex = controller?.currentMediaItemIndex ?: -1
+            val currentIndex =
+                if (timelineIndex >= 0) {
+                    timelineIndex
+                } else {
+                    st.queue.indexOfFirst { it.id == st.current?.id }
+                }
+            val plan = planRemoveFromQueue(st.queue, index, currentIndex) ?: return false
+            // A pending seek targets the item it was issued on;
+            // removing that item retires the hold with it.
+            if (plan.removedCurrent) pendingSeeks.clear()
+            controller?.let { c ->
+                if (pendingRestore == null && index < c.mediaItemCount) {
+                    c.removeMediaItem(index)
+                }
+            }
+            _state.update {
+                it.copy(
+                    queue = plan.queue,
+                    current = plan.queue.getOrNull(plan.currentIndex),
+                    // An emptied player is stopped, and a removed
+                    // current restarts the position/duration at the
+                    // fallback until the poll republishes the engine
+                    // truth for the item that took its place.
+                    isPlaying = if (plan.queue.isEmpty()) false else it.isPlaying,
+                    errorMessage = if (plan.queue.isEmpty()) null else it.errorMessage,
+                    positionMs = if (plan.queue.isEmpty() || plan.removedCurrent) 0 else it.positionMs,
+                    durationMs = if (plan.queue.isEmpty() || plan.removedCurrent) 0 else it.durationMs,
+                )
+            }
+            persistSession()
+            return true
+        }
+
+        /**
          * Retries after a playback error: re-prepares the current
          * item so ExoPlayer re-runs its load, then plays. The
          * surfaced error is cleared up front; if the retry fails too,
