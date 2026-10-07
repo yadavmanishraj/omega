@@ -57,6 +57,33 @@ data class ArtworkPaletteColors(
                 onMutedDark = Color.White,
             )
     }
+
+    // -- Material role mapping (M3 Expressive spec §1.3 / §2.4) --------
+    // Artwork colour enters the ROLE system instead of being consumed
+    // as raw gradient stops: vibrant carries the primary/tertiary
+    // expression roles, mutedDark is the container role. These are
+    // derived views over the extracted fields — extraction, caching
+    // and the strict gradient invariant (onMutedDark vs mutedDark,
+    // safeGradientEnd) are unchanged. Wave 2 surfaces consume roles;
+    // text over gradients keeps using onMutedDark + safeGradientEnd.
+
+    /** The artwork's expression color in the primary role (play fills, hero accents). */
+    val rolePrimary: Color get() = vibrant
+
+    /** Best-contrast content color on [rolePrimary] (higher of black/white ratio). */
+    val onRolePrimary: Color get() = bestContentColorOn(vibrant)
+
+    /** Tertiary role: the vibrant hue rotated +30 degrees (analogous expression). */
+    val roleTertiary: Color get() = vibrant.shiftHue(30f)
+
+    /** Best-contrast content color on [roleTertiary]. */
+    val onRoleTertiary: Color get() = bestContentColorOn(roleTertiary)
+
+    /** Container role: the darkened artwork tone grouped content sits on. */
+    val roleContainer: Color get() = mutedDark
+
+    /** Content on [roleContainer] — the strictly checked [onMutedDark]. */
+    val onRoleContainer: Color get() = onMutedDark
 }
 
 /** HSL lightness cap for [ArtworkPaletteColors.mutedDark] (spec: L* <= 0.18). */
@@ -186,6 +213,26 @@ private fun contentColorOn(background: Color): Color =
     } else {
         Color.Black
     }
+
+/**
+ * Best available content color on an artwork role color: whichever of
+ * black/white has the higher contrast ratio. Role colors are accent
+ * fills (short labels, icons), not reading surfaces, so best-effort
+ * replaces the strict 4.5:1 invariant used for gradient text.
+ */
+private fun bestContentColorOn(background: Color): Color =
+    if (contrastRatio(Color.White, background) >= contrastRatio(Color.Black, background)) {
+        Color.White
+    } else {
+        Color.Black
+    }
+
+/** Rotates this color's hue by [degrees] (HSL), keeping saturation/lightness. */
+private fun Color.shiftHue(degrees: Float): Color {
+    val hsl = toHsl()
+    val hue = (hsl[0] + degrees).mod(360f)
+    return hslToColor(hue = hue, saturation = hsl[1], lightness = hsl[2], alpha = alpha)
+}
 
 /**
  * The color a palette gradient may safely fade TO. Header/player
