@@ -3,6 +3,7 @@ package com.manishraj.saavnmusic.feature.search
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -32,6 +34,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -52,13 +55,14 @@ import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.ui.components.CircularArtwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
+import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
-import com.manishraj.saavnmusic.ui.components.ShimmerGrid
-import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
+import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
 // NOTE: SearchBarInputField (the non-deprecated SearchBar API) does not
@@ -88,6 +92,7 @@ fun SearchScreen(
     val localPlaylists by vm.userPlaylists.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val online by vm.online.collectAsState()
+    val snackbar = LocalOmegaSnackbar.current
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
     val isIdle = searchedQuery.isBlank()
     val noResults =
@@ -115,6 +120,14 @@ fun SearchScreen(
                     }
                 }
             },
+            // Contained expressive field (spec §5): the bar sits in
+            // the brightest container role with the shape language's
+            // card radius instead of the stock docked pill.
+            shape = RoundedCornerShape(OmegaRadius.xl),
+            colors =
+                SearchBarDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -150,56 +163,75 @@ fun SearchScreen(
         }
 
         if (isIdle) {
+            // Idle groups are contained blocks (spec §5): recents and
+            // starters read as two grouped surfaces on the container-
+            // low role, not loose chips on the flat background.
             if (recent.isNotEmpty()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = OmegaSpacing.lg),
-                    verticalAlignment = Alignment.CenterVertically,
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(OmegaRadius.xl),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
                 ) {
-                    Text(
-                        "Recent searches",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { vm.clearRecent() }) { Text("Clear all") }
-                }
-                // FlowRow: chips wrap the collection to the next line
-                // before any label is compressed (chip-reflow rule).
-                FlowRow(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = OmegaSpacing.lg),
-                    horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-                ) {
-                    recent.forEach { q ->
-                        RecentChip(
-                            query = q,
-                            onClick = { vm.search(q) },
-                            onRemove = { vm.removeRecent(q) },
-                        )
+                    Column(Modifier.padding(OmegaSpacing.md)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Recent searches",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { vm.clearRecent() }) { Text("Clear all") }
+                        }
+                        // FlowRow: chips wrap the collection to the
+                        // next line before any label is compressed
+                        // (chip-reflow rule).
+                        FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                        ) {
+                            recent.forEach { q ->
+                                RecentChip(
+                                    query = q,
+                                    onClick = { vm.search(q) },
+                                    onRemove = { vm.removeRecent(q) },
+                                )
+                            }
+                        }
                     }
                 }
-                Spacer(Modifier.height(OmegaSpacing.xl))
             }
-            Text(
-                "Try",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = OmegaSpacing.lg),
-            )
-            FlowRow(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(OmegaSpacing.lg),
-                horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(OmegaRadius.xl),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
             ) {
-                listOf("Arijit Singh", "Lo-fi beats", "Punjabi hits", "Old Bollywood").forEach { starter ->
-                    AssistChip(
-                        onClick = { vm.search(starter) },
-                        label = { Text(starter, maxLines = 1, softWrap = false) },
+                Column(Modifier.padding(OmegaSpacing.md)) {
+                    Text(
+                        "Try",
+                        style = MaterialTheme.typography.titleMedium,
                     )
+                    Spacer(Modifier.height(OmegaSpacing.sm))
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                    ) {
+                        listOf("Arijit Singh", "Lo-fi beats", "Punjabi hits", "Old Bollywood").forEach { starter ->
+                            AssistChip(
+                                onClick = { vm.search(starter) },
+                                label = { Text(starter, maxLines = 1, softWrap = false) },
+                            )
+                        }
+                    }
                 }
             }
             EmptyState(
@@ -212,8 +244,8 @@ fun SearchScreen(
 
         if (noResults) {
             EmptyState(
-                title = "No results for '$searchedQuery'",
-                subtitle = "Check the spelling, or try another name.",
+                title = "No results for \"$searchedQuery\"",
+                subtitle = "Try a different spelling, or search by artist name.",
                 icon = Icons.Outlined.SearchOff,
             )
             return@Column
@@ -224,123 +256,174 @@ fun SearchScreen(
         when (tab) {
             0 ->
                 when (val s = songs) {
-                    is UiState.Loading -> ShimmerList()
+                    is UiState.Loading -> SearchLoading()
                     is UiState.Error -> ErrorState(s.message, onRetry = { vm.search(searchedQuery) })
                     is UiState.Success ->
                         LazyColumn {
                             if (topResults.isNotEmpty()) {
                                 item { SectionHeader("Top results") }
-                                items(topResults.take(3)) { item ->
+                                // Section-prefixed indexed keys: the
+                                // top hit usually ALSO appears in the
+                                // songs list below — bare song-id keys
+                                // would collide inside one LazyColumn.
+                                itemsIndexed(
+                                    topResults.take(3),
+                                    key = { index, item -> "top-$index-${item.id}" },
+                                ) { _, item ->
                                     val itemIsFavorite = favorites.any { it.id == item.id }
+                                    Box(Modifier.animateItem()) {
+                                        SongRow(
+                                            item,
+                                            { vm.resolveAndPlay(item, onPlayQueue) },
+                                            trailing = {
+                                                SongOverflowMenuButton(
+                                                    song = item,
+                                                    isFavorite = itemIsFavorite,
+                                                    onDownload = {
+                                                        vm.download(item)
+                                                        snackbar?.showMessage("Download queued")
+                                                    },
+                                                    onToggleFavorite = { vm.toggleFavorite(item, itemIsFavorite) },
+                                                    onAddToPlaylist = { playlistTarget = item },
+                                                )
+                                            },
+                                        )
+                                    }
+                                }
+                                item { SectionHeader("Songs") }
+                            }
+                            itemsIndexed(
+                                s.data,
+                                key = { index, song -> "song-$index-${song.id}" },
+                            ) { _, song ->
+                                val songIsFavorite = favorites.any { it.id == song.id }
+                                Box(Modifier.animateItem()) {
                                     SongRow(
-                                        item,
-                                        { vm.resolveAndPlay(item, onPlayQueue) },
+                                        song,
+                                        { onPlayQueue(s.data, s.data.indexOf(song)) },
                                         trailing = {
                                             SongOverflowMenuButton(
-                                                song = item,
-                                                isFavorite = itemIsFavorite,
-                                                onDownload = { vm.download(item) },
-                                                onToggleFavorite = { vm.toggleFavorite(item, itemIsFavorite) },
-                                                onAddToPlaylist = { playlistTarget = item },
+                                                song = song,
+                                                isFavorite = songIsFavorite,
+                                                onDownload = {
+                                                    vm.download(song)
+                                                    snackbar?.showMessage("Download queued")
+                                                },
+                                                onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                                onAddToPlaylist = { playlistTarget = song },
                                             )
                                         },
                                     )
                                 }
-                                item { SectionHeader("Songs") }
-                            }
-                            items(s.data) { song ->
-                                val songIsFavorite = favorites.any { it.id == song.id }
-                                SongRow(
-                                    song,
-                                    { onPlayQueue(s.data, s.data.indexOf(song)) },
-                                    trailing = {
-                                        SongOverflowMenuButton(
-                                            song = song,
-                                            isFavorite = songIsFavorite,
-                                            onDownload = { vm.download(song) },
-                                            onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
-                                            onAddToPlaylist = { playlistTarget = song },
-                                        )
-                                    },
-                                )
                             }
                         }
                 }
 
             1 ->
-                if (albums.isEmpty()) {
-                    if (songs is UiState.Loading) {
-                        ShimmerGrid()
-                    } else {
-                        EmptyState("No albums found", "Try a different search.", icon = Icons.Outlined.SearchOff)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
-                    ) {
-                        items(albums) { a ->
-                            MediaCard(a.name, a.artist, a.imageUrl) { onAlbum(a.id) }
+                when {
+                    // A failed load owns EVERY tab (S1): the shared
+                    // error treatment replaces results even if the
+                    // user was sitting on this tab when it failed.
+                    songs is UiState.Error ->
+                        ErrorState(
+                            (songs as UiState.Error).message,
+                            onRetry = { vm.search(searchedQuery) },
+                        )
+                    albums.isEmpty() ->
+                        if (songs is UiState.Loading) {
+                            SearchLoading()
+                        } else {
+                            EmptyState("No albums found", "Try a different search.", icon = Icons.Outlined.SearchOff)
                         }
-                    }
+                    else ->
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
+                        ) {
+                            items(albums) { a ->
+                                MediaCard(a.name, a.artist, a.imageUrl) { onAlbum(a.id) }
+                            }
+                        }
                 }
 
             2 ->
-                if (artists.isEmpty()) {
-                    if (songs is UiState.Loading) {
-                        ShimmerList()
-                    } else {
-                        EmptyState("No artists found", "Try a different search.", icon = Icons.Outlined.SearchOff)
-                    }
-                } else {
-                    LazyColumn {
-                        items(artists) { a ->
-                            ListItem(
-                                headlineContent = { Text(a.name, style = MaterialTheme.typography.titleMedium) },
-                                leadingContent = { CircularArtwork(a.imageUrl, contentDescription = a.name) },
-                                modifier = Modifier.clickable { onArtist(a.id) },
-                            )
+                when {
+                    songs is UiState.Error ->
+                        ErrorState(
+                            (songs as UiState.Error).message,
+                            onRetry = { vm.search(searchedQuery) },
+                        )
+                    artists.isEmpty() ->
+                        if (songs is UiState.Loading) {
+                            SearchLoading()
+                        } else {
+                            EmptyState("No artists found", "Try a different search.", icon = Icons.Outlined.SearchOff)
                         }
-                    }
+                    else ->
+                        LazyColumn {
+                            items(artists) { a ->
+                                ListItem(
+                                    headlineContent = { Text(a.name, style = MaterialTheme.typography.titleMedium) },
+                                    leadingContent = { CircularArtwork(a.imageUrl, contentDescription = a.name) },
+                                    modifier = Modifier.clickable { onArtist(a.id) },
+                                )
+                            }
+                        }
                 }
 
             else ->
-                if (playlists.isEmpty()) {
-                    if (songs is UiState.Loading) {
-                        ShimmerGrid()
-                    } else {
-                        EmptyState("No playlists found", "Try a different search.", icon = Icons.Outlined.SearchOff)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
-                    ) {
-                        items(playlists) { p ->
-                            MediaCard(p.name, "${p.songCount ?: 0} songs", p.imageUrl) { onPlaylist(p.id) }
+                when {
+                    songs is UiState.Error ->
+                        ErrorState(
+                            (songs as UiState.Error).message,
+                            onRetry = { vm.search(searchedQuery) },
+                        )
+                    playlists.isEmpty() ->
+                        if (songs is UiState.Loading) {
+                            SearchLoading()
+                        } else {
+                            EmptyState("No playlists found", "Try a different search.", icon = Icons.Outlined.SearchOff)
                         }
-                    }
+                    else ->
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
+                        ) {
+                            items(playlists) { p ->
+                                MediaCard(p.name, "${p.songCount ?: 0} songs", p.imageUrl) { onPlaylist(p.id) }
+                            }
+                        }
                 }
         }
 
-        // Wave 2 wiring point: fire LocalOmegaSnackbar's
-        // "Added to {playlist}" here — the shell host is mounted
-        // (Detail's picker is the Wave 1 proof); until then the
-        // picker closing is the confirmation, as before.
+        // Picker confirmation rides the shell snackbar (spec §7),
+        // matching Detail's Wave 1 proof wiring.
         playlistTarget?.let { song ->
             PlaylistPickerDialog(
                 playlists = localPlaylists,
                 onPick = { playlist ->
                     vm.addToPlaylist(playlist.id, song)
                     playlistTarget = null
+                    snackbar?.showMessage("Added to ${playlist.name}")
                 },
                 onCreatePlaylist = { name ->
                     vm.createPlaylistAndAdd(name, song)
                     playlistTarget = null
+                    snackbar?.showMessage("Added to $name")
                 },
                 onDismiss = { playlistTarget = null },
             )
         }
+    }
+}
+
+/** Initial results load (spec §5): the expressive morph, centered —
+ * search loads are short, undifferentiated waits, unlike the
+ * content-shaped skeleton loads on Home/Detail. */
+@Composable
+private fun SearchLoading() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        OmegaLoadingIndicator(contentDescription = "Searching")
     }
 }
 

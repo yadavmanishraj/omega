@@ -14,7 +14,9 @@ import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.download.DownloadWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -93,6 +95,7 @@ class SearchViewModel
         val recent = repo.recentSearches.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         private val pendingQuery = MutableStateFlow("")
+        private var searchJob: Job? = null
 
         init {
             // Typing auto-searches after ~300ms of quiet (spec §5
@@ -101,7 +104,7 @@ class SearchViewModel
                 pendingQuery
                     .debounce(300)
                     .distinctUntilChanged()
-                    .collect { q -> if (q.isNotBlank()) runSearch(q, recordRecent = false) }
+                    .collect { q -> if (q.isNotBlank()) runSearch(q) }
             }
         }
 
@@ -113,33 +116,60 @@ class SearchViewModel
         fun search(q: String) {
             query.value = q
             pendingQuery.value = ""
-            runSearch(q.trim(), recordRecent = true)
+            runSearch(q.trim())
         }
 
-        private fun runSearch(
-            q: String,
-            recordRecent: Boolean,
-        ) {
+        private fun runSearch(q: String) {
             if (q.isBlank()) return
-            viewModelScope.launch {
-                songs.value = UiState.Loading
-                searchedQuery.value = q
-                try {
-                    val global = repo.searchAll(q)
-                    topResults.value = global.topSongs + global.songs
-                    songs.value = UiState.Success(repo.searchSongs(q))
-                    albums.value = repo.searchAlbums(q)
-                    artists.value = repo.searchArtists(q)
-                    playlists.value = repo.searchPlaylists(q)
-                    // Only successful searches earn a Recents slot —
-                    // a failed query used to be committed before the
-                    // attempt (UI/UX Phase B audit).
-                    if (recordRecent) repo.addRecentSearch(q)
-                } catch (e: Exception) {
-                    songs.value =
-                        UiState.Error("Couldn't search right now. Check your connection, then retry.")
+            // A newer search supersedes an in-flight one: without
+            // this, a slow earlier query could finish last and paint
+            // its stale results — or its failure — over the current
+            // query's state.
+            searchJob?.cancel()
+            searchJob =
+                viewModelScope.launch {
+                    songs.value = UiState.Loading
+                    searchedQuery.value = q
+                    // Invariant: while a search runs, every result
+                    // holder belongs to it — nothing from a previous
+                    // query may show through (phone QA major).
+                    topResults.value = emptyList()
+                    albums.value = emptyList()
+                    artists.value = emptyList()
+                    playlists.value = emptyList()
+                    try {
+                        val global = repo.searchAll(q)
+                        topResults.value = global.topSongs + global.songs
+                        songs.value = UiState.Success(repo.searchSongs(q))
+                        albums.value = repo.searchAlbums(q)
+                        artists.value = repo.searchArtists(q)
+                        playlists.value = repo.searchPlaylists(q)
+                        // Only a search that COMPLETED earns a Recents
+                        // slot, and it earns it on both entry paths —
+                        // submit and debounce alike. (Failures were
+                        // once committed before the attempt — Phase B;
+                        // debounce successes were once never recorded —
+                        // exhaustive phone QA, 2026-10-07.) The DAO
+                        // insert is REPLACE on the query key, so a
+                        // repeat just moves the query to the front.
+                        repo.addRecentSearch(q)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // A failed load REPLACES the previous results:
+                        // partial writes from this attempt are cleared
+                        // and `songs` carries the error, which the
+                        // screen renders as the shared ErrorState on
+                        // every tab — stale results never sit silently
+                        // under a new query.
+                        topResults.value = emptyList()
+                        albums.value = emptyList()
+                        artists.value = emptyList()
+                        playlists.value = emptyList()
+                        songs.value =
+                            UiState.Error("Couldn't search right now. Check your connection, then retry.")
+                    }
                 }
-            }
         }
 
         /** Global-search items are lightweight; resolve to a playable song before handing to the player. */

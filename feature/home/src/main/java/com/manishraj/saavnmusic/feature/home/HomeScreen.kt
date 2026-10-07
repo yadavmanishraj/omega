@@ -3,6 +3,7 @@ package com.manishraj.saavnmusic.feature.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,15 +15,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,18 +36,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
+import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
+import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import java.util.Calendar
 
@@ -80,10 +88,47 @@ fun HomeScreen(
     val favorites by vm.favorites.collectAsState()
     val localPlaylists by vm.userPlaylists.collectAsState()
     val online by vm.online.collectAsState()
+    val snackbar = LocalOmegaSnackbar.current
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
 
     val refreshing = trending is UiState.Loading
-    PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }) {
+    val pullToRefreshState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { vm.load() },
+        state = pullToRefreshState,
+        // The expressive loading morph replaces the stock refresh
+        // spinner (spec §5): a contained chip fades/scales in with the
+        // pull fraction and stays while the refresh runs.
+        indicator = {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shadowElevation = 3.dp,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = OmegaSpacing.md)
+                        .graphicsLayer {
+                            val fraction =
+                                if (refreshing) {
+                                    1f
+                                } else {
+                                    pullToRefreshState.positionFraction.coerceIn(0f, 1f)
+                                }
+                            alpha = fraction
+                            scaleX = 0.7f + 0.3f * fraction
+                            scaleY = 0.7f + 0.3f * fraction
+                        },
+            ) {
+                OmegaLoadingIndicator(
+                    modifier = Modifier.padding(OmegaSpacing.sm),
+                    contained = true,
+                    contentDescription = "Refreshing",
+                )
+            }
+        },
+    ) {
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 Row(
@@ -95,7 +140,9 @@ fun HomeScreen(
                     Column(Modifier.weight(1f)) {
                         Text(
                             greetingForHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)),
-                            style = MaterialTheme.typography.displaySmall,
+                            // The screen's one emphasis (spec §5):
+                            // emphasized weight at headline size.
+                            style = MaterialTheme.typography.headlineMediumEmphasized,
                         )
                         Text(
                             "No account. Just music.",
@@ -150,13 +197,33 @@ fun HomeScreen(
             }
 
             if (history.isNotEmpty()) {
-                item { SectionHeader("Jump back in") }
+                // "Jump back in" is Home's most important rail (spec
+                // §5): the brightest container mapping + the screen's
+                // one emphasized section header set it apart from the
+                // flat rails below; tap behavior is unchanged.
                 item {
-                    LazyRow {
-                        items(history) { song ->
-                            MediaCard(song.name, song.artist, song.imageUrl) {
-                                onPlayQueue(history, history.indexOf(song))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(OmegaRadius.xl),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+                    ) {
+                        Column {
+                            SectionHeader("Jump back in", emphasized = true)
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = OmegaSpacing.sm),
+                            ) {
+                                items(history, key = { it.id }) { song ->
+                                    Box(Modifier.animateItem()) {
+                                        MediaCard(song.name, song.artist, song.imageUrl) {
+                                            onPlayQueue(history, history.indexOf(song))
+                                        }
+                                    }
+                                }
                             }
+                            Spacer(Modifier.height(OmegaSpacing.sm))
                         }
                     }
                 }
@@ -169,28 +236,35 @@ fun HomeScreen(
                     item { SectionHeader("Your downloads") }
                     item {
                         LazyRow {
-                            items(downloads) { d ->
-                                MediaCard(d.name, d.artist, d.imageUrl) { onOpenDownloads() }
+                            items(downloads, key = { it.songId }) { d ->
+                                Box(Modifier.animateItem()) {
+                                    MediaCard(d.name, d.artist, d.imageUrl) { onOpenDownloads() }
+                                }
                             }
                         }
                     }
                 }
                 if (favorites.isNotEmpty()) {
                     item { SectionHeader("Your favorites") }
-                    items(favorites.take(10)) { song ->
-                        SongRow(
-                            song,
-                            { onPlayQueue(favorites, favorites.indexOf(song)) },
-                            trailing = {
-                                SongOverflowMenuButton(
-                                    song = song,
-                                    isFavorite = true,
-                                    onDownload = { vm.download(song) },
-                                    onToggleFavorite = { vm.toggleFavorite(song, true) },
-                                    onAddToPlaylist = { playlistTarget = song },
-                                )
-                            },
-                        )
+                    items(favorites.take(10), key = { it.id }) { song ->
+                        Box(Modifier.animateItem()) {
+                            SongRow(
+                                song,
+                                { onPlayQueue(favorites, favorites.indexOf(song)) },
+                                trailing = {
+                                    SongOverflowMenuButton(
+                                        song = song,
+                                        isFavorite = true,
+                                        onDownload = {
+                                            vm.download(song)
+                                            snackbar?.showMessage("Download queued")
+                                        },
+                                        onToggleFavorite = { vm.toggleFavorite(song, true) },
+                                        onAddToPlaylist = { playlistTarget = song },
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
                 if (downloads.isEmpty() && favorites.isEmpty() && history.isEmpty()) {
@@ -230,21 +304,26 @@ fun HomeScreen(
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
                                 item { SectionHeader("Trending songs") }
-                                items(s.data.take(10)) { song ->
+                                items(s.data.take(10), key = { it.id }) { song ->
                                     val songIsFavorite = favorites.any { it.id == song.id }
-                                    SongRow(
-                                        song,
-                                        { onPlayQueue(s.data, s.data.indexOf(song)) },
-                                        trailing = {
-                                            SongOverflowMenuButton(
-                                                song = song,
-                                                isFavorite = songIsFavorite,
-                                                onDownload = { vm.download(song) },
-                                                onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
-                                                onAddToPlaylist = { playlistTarget = song },
-                                            )
-                                        },
-                                    )
+                                    Box(Modifier.animateItem()) {
+                                        SongRow(
+                                            song,
+                                            { onPlayQueue(s.data, s.data.indexOf(song)) },
+                                            trailing = {
+                                                SongOverflowMenuButton(
+                                                    song = song,
+                                                    isFavorite = songIsFavorite,
+                                                    onDownload = {
+                                                        vm.download(song)
+                                                        snackbar?.showMessage("Download queued")
+                                                    },
+                                                    onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                                    onAddToPlaylist = { playlistTarget = song },
+                                                )
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -263,8 +342,10 @@ fun HomeScreen(
                                 item { SectionHeader("New albums") }
                                 item {
                                     LazyRow {
-                                        items(s.data) { a ->
-                                            MediaCard(a.name, a.artist, a.imageUrl) { onAlbum(a.id) }
+                                        items(s.data, key = { it.id }) { a ->
+                                            Box(Modifier.animateItem()) {
+                                                MediaCard(a.name, a.artist, a.imageUrl) { onAlbum(a.id) }
+                                            }
                                         }
                                     }
                                 }
@@ -285,8 +366,10 @@ fun HomeScreen(
                                 item { SectionHeader("Playlists for you") }
                                 item {
                                     LazyRow {
-                                        items(s.data) { p ->
-                                            MediaCard(p.name, p.description.orEmpty(), p.imageUrl) { onPlaylist(p.id) }
+                                        items(s.data, key = { it.id }) { p ->
+                                            Box(Modifier.animateItem()) {
+                                                MediaCard(p.name, p.description.orEmpty(), p.imageUrl) { onPlaylist(p.id) }
+                                            }
                                         }
                                     }
                                 }
@@ -307,8 +390,10 @@ fun HomeScreen(
                                 item { SectionHeader("Artists") }
                                 item {
                                     LazyRow {
-                                        items(s.data) { a ->
-                                            MediaCard(a.name, "Artist", a.imageUrl, circular = true) { onArtist(a.id) }
+                                        items(s.data, key = { it.id }) { a ->
+                                            Box(Modifier.animateItem()) {
+                                                MediaCard(a.name, "Artist", a.imageUrl, circular = true) { onArtist(a.id) }
+                                            }
                                         }
                                     }
                                 }
@@ -321,20 +406,20 @@ fun HomeScreen(
         }
     }
 
-    // Wave 2 wiring point: fire LocalOmegaSnackbar's
-    // "Added to {playlist}" here — the shell host is mounted
-    // (Detail's picker is the Wave 1 proof); until then the
-    // picker closing is the confirmation, as before.
+    // Picker confirmation rides the shell snackbar (spec §7),
+    // matching Detail's Wave 1 proof wiring.
     playlistTarget?.let { song ->
         PlaylistPickerDialog(
             playlists = localPlaylists,
             onPick = { playlist ->
                 vm.addToPlaylist(playlist.id, song)
                 playlistTarget = null
+                snackbar?.showMessage("Added to ${playlist.name}")
             },
             onCreatePlaylist = { name ->
                 vm.createPlaylistAndAdd(name, song)
                 playlistTarget = null
+                snackbar?.showMessage("Added to $name")
             },
             onDismiss = { playlistTarget = null },
         )
