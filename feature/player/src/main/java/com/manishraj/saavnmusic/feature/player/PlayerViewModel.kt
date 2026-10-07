@@ -26,12 +26,23 @@ class PlayerViewModel
         val appSettings: StateFlow<AppSettings> =
             repo.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
+        init {
+            // History recording is centralized in the controller
+            // (BUG-5): it observes every track start — row taps,
+            // auto-advance, next/prev, queue-sheet taps. Recording
+            // here in play() only ever saw explicit row taps, so
+            // most of a listening session never reached History.
+            // This VM is activity-scoped (shell), so the collection
+            // lives as long as playback can happen.
+            viewModelScope.launch {
+                player.playStarts.collect { repo.recordPlay(it) }
+            }
+        }
+
         fun play(
             songs: List<Song>,
             index: Int,
         ) {
-            val s = songs.getOrNull(index) ?: return
-            viewModelScope.launch { repo.recordPlay(s) }
             player.playQueue(songs, index, appSettings.value.streamQuality)
         }
 
