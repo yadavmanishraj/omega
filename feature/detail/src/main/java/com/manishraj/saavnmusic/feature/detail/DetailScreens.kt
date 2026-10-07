@@ -278,10 +278,7 @@ private fun HeaderDescription(text: String) {
         if (LocalReducedMotion.current) {
             snap()
         } else {
-            // The scheme's spatial specs are springs (finite) by
-            // construction; animateContentSize just declares the
-            // narrower parameter type. snap() is the never-taken floor.
-            MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>() as? FiniteAnimationSpec<IntSize> ?: snap()
+            MaterialTheme.motionScheme.defaultSpatialSpec()
         }
     Text(
         text,
