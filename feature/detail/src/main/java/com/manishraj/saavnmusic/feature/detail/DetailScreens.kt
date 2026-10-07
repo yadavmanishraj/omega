@@ -333,8 +333,15 @@ fun SongListHeader(
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
-            if (!desc.isNullOrBlank()) {
-                HeaderDescription(desc)
+            // Upstream's baked header string repeats the subtitle's
+            // artists and can be pure credit metadata — clean it
+            // against the subtitle before display (see
+            // HeaderDescriptionText). A fully-metadata description
+            // cleans to null and the header hides it, exactly as it
+            // already hides a blank one.
+            val cleanedDesc = cleanHeaderDescription(desc, subtitle)
+            if (!cleanedDesc.isNullOrBlank()) {
+                HeaderDescription(cleanedDesc)
             }
         }
     }
