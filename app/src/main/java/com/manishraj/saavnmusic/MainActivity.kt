@@ -1,11 +1,16 @@
 package com.manishraj.saavnmusic
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
@@ -64,6 +69,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
@@ -79,6 +86,7 @@ import com.manishraj.saavnmusic.feature.detail.PlaylistScreen
 import com.manishraj.saavnmusic.feature.home.HomeScreen
 import com.manishraj.saavnmusic.feature.library.LIBRARY_TAB_DOWNLOADS
 import com.manishraj.saavnmusic.feature.library.LibraryScreen
+import com.manishraj.saavnmusic.feature.library.LocalPlaylistDetailScreen
 import com.manishraj.saavnmusic.feature.player.FullPlayer
 import com.manishraj.saavnmusic.feature.player.MiniPlayer
 import com.manishraj.saavnmusic.feature.player.PlayerViewModel
@@ -158,6 +166,35 @@ fun AppRoot() {
     // Destination routes are patterns (e.g. "library?tab={tab}"); the
     // bottom bar compares against the plain destination name.
     val route = back?.destination?.route?.substringBefore('?')
+    // The local playlist detail (library/playlist/{id}) belongs to
+    // the Library tab for highlight purposes even though it is a
+    // forward destination for transitions (see isTopLevelRoute).
+    val tabRoute = if (route?.startsWith("library") == true) "library" else route
+    // POST_NOTIFICATIONS (A17 audit §6a): ask ONCE, contextually, at
+    // the first download enqueue — never at launch, never at first
+    // play (playback's media notification works without it). The
+    // asked-once flag persists in settings; a denial is silent and
+    // final — downloads keep working, the Downloads tab stays the
+    // progress surface. The flag is written BEFORE the prompt so a
+    // process death mid-prompt can't re-ask.
+    val settingsVm: SettingsViewModel = hiltViewModel()
+    val shellSettings by settingsVm.state.collectAsState()
+    val appContext = LocalContext.current
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            // Result intentionally ignored: granted or denied, there
+            // is nothing to say — feedback would violate §6a.
+        }
+    val onDownloadEnqueued: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !shellSettings.notificationPermissionAsked &&
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            settingsVm.update { it.copy(notificationPermissionAsked = true) }
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     // Features never depend on :feature:player; :app injects playback as a
     // lambda, the same pattern used for cross-feature navigation.
     val playQueue: (List<Song>, Int) -> Unit = { songs, index -> playerVm.play(songs, index) }
@@ -373,7 +410,20 @@ fun AppRoot() {
                                                 restoreState = true
                                             }
                                         },
+                                        onOpenPlaylist = { id -> nav.navigate("library/playlist/$id") },
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                         initialTab = entry.arguments?.getInt("tab")?.takeIf { it >= 0 } ?: 0,
+                                    )
+                                }
+                                composable(
+                                    "library/playlist/{id}",
+                                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                                ) { entry ->
+                                    LocalPlaylistDetailScreen(
+                                        playlistId = entry.arguments?.getLong("id") ?: -1L,
+                                        onBack = { nav.popBackStack() },
+                                        onPlayQueue = playQueue,
+                                        onDownloadEnqueued = onDownloadEnqueued,
                                     )
                                 }
                                 composable("settings") { SettingsScreen() }
@@ -426,11 +476,11 @@ fun AppRoot() {
                         Spacer(Modifier.weight(1f))
                         destinations.forEach { dest ->
                             NavigationRailItem(
-                                selected = route == dest.route,
+                                selected = tabRoute == dest.route,
                                 onClick = { onDestinationClick(dest) },
                                 icon = {
                                     Icon(
-                                        if (route == dest.route) dest.selectedIcon else dest.icon,
+                                        if (tabRoute == dest.route) dest.selectedIcon else dest.icon,
                                         contentDescription = dest.label,
                                     )
                                 },
@@ -467,11 +517,11 @@ fun AppRoot() {
                             ShortNavigationBar {
                                 destinations.forEach { dest ->
                                     ShortNavigationBarItem(
-                                        selected = route == dest.route,
+                                        selected = tabRoute == dest.route,
                                         onClick = { onDestinationClick(dest) },
                                         icon = {
                                             Icon(
-                                                if (route == dest.route) dest.selectedIcon else dest.icon,
+                                                if (tabRoute == dest.route) dest.selectedIcon else dest.icon,
                                                 contentDescription = dest.label,
                                             )
                                         },
@@ -509,9 +559,15 @@ private const val SHARED_AXIS_PARALLAX_FRACTION = 0.025f
 
 /** Top-level (tab) destination patterns; "library" carries its
  * optional `?tab={tab}` argument suffix. Everything else in the
- * graph is a forward (Detail) destination. */
+ * graph — including `library/playlist/{id}`, a forward push from
+ * the Library tab — is a Detail-class destination and gets the
+ * shared-axis treatment. */
 private fun isTopLevelRoute(route: String?): Boolean =
-    route == "home" || route == "search" || route == "settings" || route?.startsWith("library") == true
+    route == "home" ||
+        route == "search" ||
+        route == "settings" ||
+        route == "library" ||
+        route?.startsWith("library?") == true
 
 /**
  * NavHost transitions (M3 Expressive spec §4.5). Landing on a

@@ -181,6 +181,34 @@ class LibraryViewModelTest {
         }
 
     @Test
+    fun playlistByIdResolvesExistingPlaylist() =
+        runTest(dispatcher) {
+            val vm = viewModel()
+            val id = repo.createPlaylist("Chill")
+            repo.addToPlaylist(id, song("p1"))
+
+            val found = vm.playlist(id).first()
+            assertEquals(id, found?.id)
+            assertEquals("Chill", found?.name)
+            assertEquals(1, found?.songCount)
+        }
+
+    @Test
+    fun playlistByIdEmitsNullForUnknownAndDeletedIds() =
+        runTest(dispatcher) {
+            val vm = viewModel()
+            // Unknown id: the detail destination pops back on this.
+            assertEquals(null, vm.playlist(4242L).first())
+
+            // Deleted id: present, then gone — the restored-after-
+            // process-death case the destination must survive.
+            val id = repo.createPlaylist("Gone")
+            assertEquals("Gone", vm.playlist(id).first()?.name)
+            repo.deletePlaylist(id)
+            assertEquals(null, vm.playlist(id).first())
+        }
+
+    @Test
     fun sortModeCanBeChanged() {
         val vm = viewModel()
         vm.sortMode.value = SortMode.A_Z

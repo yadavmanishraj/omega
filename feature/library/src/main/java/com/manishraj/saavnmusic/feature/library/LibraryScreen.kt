@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -48,7 +47,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -92,7 +90,7 @@ private fun formatBytes(bytes: Long): String =
  * nothing playing the engine APPENDS it without starting playback —
  * the copy must not promise "next" in that case.
  */
-private fun playNextMessage(
+internal fun playNextMessage(
     result: InsertNextResult,
     title: String,
 ): String =
@@ -132,7 +130,7 @@ private fun <T> sorted(
  * dividers.
  */
 @Composable
-private fun SegmentedSegment(
+internal fun SegmentedSegment(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -162,6 +160,8 @@ fun LibraryScreen(
     vm: LibraryViewModel = hiltViewModel(),
     onPlayQueue: (List<Song>, Int) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenPlaylist: (Long) -> Unit,
+    onDownloadEnqueued: () -> Unit = {},
     initialTab: Int = LIBRARY_TAB_FAVORITES,
 ) {
     // The user's tab survives leaving and returning; a navigation
@@ -185,7 +185,6 @@ fun LibraryScreen(
     var confirmClearHistory by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DownloadInfo?>(null) }
     var pendingDeletePlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
-    var openPlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
     val snackbar = LocalOmegaSnackbar.current
     val confirmAdded: (String) -> Unit = { playlistName ->
@@ -203,19 +202,9 @@ fun LibraryScreen(
         )
     }
 
-    val playlist = openPlaylist
-    if (playlist != null) {
-        LocalPlaylistDetail(
-            vm = vm,
-            playlist = playlist,
-            playlists = pls,
-            onBack = { openPlaylist = null },
-            onPlayQueue = onPlayQueue,
-            onAddedToPlaylist = confirmAdded,
-        )
-        return
-    }
-
+    // Local playlist detail is a NavHost destination now
+    // (`library/playlist/{id}`, A17 F-01) — no conditional render
+    // here, so system Back and the tab's saved state behave.
     Scaffold(
         floatingActionButton = {
             if (tab == LIBRARY_TAB_PLAYLISTS) {
@@ -279,7 +268,16 @@ fun LibraryScreen(
                 onSelect = { tab = it },
             )
 
-            if (tab != LIBRARY_TAB_PLAYLISTS) {
+            // F-25: no sort chrome over an empty tab — sorting
+            // nothing says nothing; the empty state owns the screen.
+            val currentTabEmpty =
+                when (tab) {
+                    LIBRARY_TAB_FAVORITES -> favs.isEmpty()
+                    LIBRARY_TAB_DOWNLOADS -> dls.isEmpty()
+                    LIBRARY_TAB_HISTORY -> hist.isEmpty()
+                    else -> false
+                }
+            if (tab != LIBRARY_TAB_PLAYLISTS && !currentTabEmpty) {
                 Row(
                     Modifier.padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
@@ -361,7 +359,13 @@ fun LibraryScreen(
                                                             playNextMessage(vm.playNext(song), song.name),
                                                         )
                                                     },
-                                                    onDownload = { vm.download(song) },
+                                                    onDownload = {
+                                                        vm.download(song)
+                                                        // F-04: Library downloads announce
+                                                        // exactly like Home's.
+                                                        snackbar?.showMessage("Download queued")
+                                                        onDownloadEnqueued()
+                                                    },
                                                     onToggleFavorite = { unfavoriteWithUndo(song) },
                                                     onAddToPlaylist = { playlistTarget = song },
                                                 )
@@ -422,21 +426,42 @@ fun LibraryScreen(
                                                 },
                                             supportingContent = {
                                                 Column {
-                                                    // ONE protected line (Phase B): quality +
-                                                    // size + status never wrap or truncate
-                                                    // into a second line.
-                                                    Text(
-                                                        listOf(
-                                                            d.artist,
-                                                            d.quality,
-                                                            formatBytes(d.sizeBytes),
-                                                            downloadStatusLabel(d.status),
-                                                        ).filter { it.isNotBlank() }
-                                                            .joinToString(" • "),
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                    )
+                                                    // Meta line with a PROTECTED status
+                                                    // slot (F-18), mirroring SongRow's
+                                                    // duration slot: artist • quality •
+                                                    // size flexes and ellipsizes FIRST;
+                                                    // the status — the row's primary
+                                                    // signal — never truncates.
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            listOf(
+                                                                d.artist,
+                                                                d.quality,
+                                                                formatBytes(d.sizeBytes),
+                                                            ).filter { it.isNotBlank() }
+                                                                .joinToString(" • "),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            modifier = Modifier.weight(1f, fill = false),
+                                                        )
+                                                        Text(
+                                                            " • " +
+                                                                if (d.status == "DOWNLOADING" && d.progress > 0) {
+                                                                    "Downloading ${d.progress}%"
+                                                                } else {
+                                                                    downloadStatusLabel(d.status)
+                                                                },
+                                                            maxLines = 1,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color =
+                                                                when (d.status) {
+                                                                    "FAILED" -> MaterialTheme.colorScheme.error
+                                                                    "DOWNLOADING" -> MaterialTheme.colorScheme.primary
+                                                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                                },
+                                                        )
+                                                    }
                                                     if (d.status == "FAILED") {
                                                         val errorMessage = d.errorMessage
                                                         if (!errorMessage.isNullOrBlank()) {
@@ -452,21 +477,23 @@ fun LibraryScreen(
                                                                 contentDescription = null,
                                                                 tint = MaterialTheme.colorScheme.error,
                                                             )
-                                                            TextButton(onClick = { vm.retryDownload(d) }) {
+                                                            TextButton(onClick = {
+                                                                vm.retryDownload(d)
+                                                                snackbar?.showMessage("Download queued")
+                                                                onDownloadEnqueued()
+                                                            }) {
                                                                 Text("Retry")
                                                             }
                                                         }
                                                     } else if (d.status != "COMPLETED") {
                                                         Spacer(Modifier.height(OmegaSpacing.xs))
                                                         if (d.progress > 0) {
-                                                            // Bytes are flowing: determinate.
+                                                            // Bytes are flowing: determinate
+                                                            // (the % lives in the protected
+                                                            // status slot above).
                                                             LinearProgressIndicator(
                                                                 progress = { d.progress / 100f },
                                                                 modifier = Modifier.fillMaxWidth(),
-                                                            )
-                                                            Text(
-                                                                "${d.progress}%",
-                                                                style = MaterialTheme.typography.bodySmall,
                                                             )
                                                         } else {
                                                             // Indeterminate phase (queued /
@@ -525,7 +552,13 @@ fun LibraryScreen(
                                                         playNextMessage(vm.playNext(song), song.name),
                                                     )
                                                 },
-                                                onDownload = { vm.download(song) },
+                                                onDownload = {
+                                                    vm.download(song)
+                                                    // F-04: Library downloads announce
+                                                    // exactly like Home's.
+                                                    snackbar?.showMessage("Download queued")
+                                                    onDownloadEnqueued()
+                                                },
                                                 onToggleFavorite = {
                                                     vm.toggleFavorite(
                                                         song,
@@ -572,7 +605,7 @@ fun LibraryScreen(
                                             )
                                         }
                                     },
-                                    onClick = { openPlaylist = p },
+                                    onClick = { onOpenPlaylist(p.id) },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -628,7 +661,10 @@ fun LibraryScreen(
                     snackbar?.showMessage(
                         "Download deleted",
                         actionLabel = "Undo",
-                        onAction = { vm.retryDownload(d) },
+                        onAction = {
+                            vm.retryDownload(d)
+                            onDownloadEnqueued()
+                        },
                     )
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
@@ -652,7 +688,6 @@ fun LibraryScreen(
             confirmButton = {
                 TextButton(onClick = {
                     pendingDeletePlaylist = null
-                    if (openPlaylist?.id == p.id) openPlaylist = null
                     vm.deletePlaylist(p.id)
                     snackbar?.showMessage("Playlist deleted")
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
@@ -696,6 +731,9 @@ fun LibraryScreen(
                     onClick = {
                         vm.createPlaylist(name.trim())
                         showCreate = false
+                        // F-24: creation confirms in the same grammar
+                        // as every other Library action.
+                        snackbar?.showMessage("Playlist created")
                     },
                     enabled = !blank,
                 ) { Text("Create") }
@@ -748,98 +786,5 @@ private fun LibraryTabs(
                 text = { Text("$label · ${counts[i]}", maxLines = 1, softWrap = false) },
             )
         }
-    }
-}
-
-/** A local playlist's songs, with playback. */
-@Composable
-private fun LocalPlaylistDetail(
-    vm: LibraryViewModel,
-    playlist: LocalPlaylist,
-    playlists: List<LocalPlaylist>,
-    onBack: () -> Unit,
-    onPlayQueue: (List<Song>, Int) -> Unit,
-    onAddedToPlaylist: (String) -> Unit,
-) {
-    val songs by produceState<List<Song>>(emptyList(), playlist.id) {
-        vm.playlistSongs(playlist.id).collect { value = it }
-    }
-    val favs by vm.favorites.collectAsState()
-    val snackbar = LocalOmegaSnackbar.current
-    var playlistTarget by remember { mutableStateOf<Song?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(OmegaSpacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Library")
-            }
-            Text(playlist.name, style = MaterialTheme.typography.headlineSmall)
-        }
-        if (songs.isEmpty()) {
-            EmptyState(
-                "No songs yet",
-                "Use a song's ⋮ menu anywhere in the app to add it to a playlist.",
-            )
-        } else {
-            LazyColumn(
-                contentPadding =
-                    PaddingValues(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                items(songs, key = { it.id }) { song ->
-                    val songIsFavorite = favs.any { it.id == song.id }
-                    SegmentedSegment(Modifier.animateItem()) {
-                        SongRow(
-                            song,
-                            { onPlayQueue(songs, songs.indexOf(song)) },
-                            trailing = {
-                                SongOverflowMenuButton(
-                                    song = song,
-                                    isFavorite = songIsFavorite,
-                                    onPlayNext = {
-                                        snackbar?.showMessage(
-                                            playNextMessage(vm.playNext(song), song.name),
-                                        )
-                                    },
-                                    onDownload = { vm.download(song) },
-                                    onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
-                                    onRemoveFromPlaylist = {
-                                        vm.removeFromPlaylist(playlist.id, song) { removed ->
-                                            snackbar?.showMessage(
-                                                "Removed from ${playlist.name}",
-                                                actionLabel = "Undo",
-                                                onAction = { vm.restoreToPlaylist(removed) },
-                                            )
-                                        }
-                                    },
-                                    onAddToPlaylist = { playlistTarget = song },
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    playlistTarget?.let { song ->
-        PlaylistPickerDialog(
-            playlists = playlists,
-            onPick = { picked ->
-                vm.addToPlaylist(picked.id, song)
-                playlistTarget = null
-                onAddedToPlaylist(picked.name)
-            },
-            onCreatePlaylist = { name ->
-                vm.createPlaylistAndAdd(name, song)
-                playlistTarget = null
-                onAddedToPlaylist(name)
-            },
-            onDismiss = { playlistTarget = null },
-        )
     }
 }
