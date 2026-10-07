@@ -88,6 +88,8 @@ import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.playback.PlayerState
+import com.manishraj.saavnmusic.playback.RepeatMode
+import com.manishraj.saavnmusic.playback.repeatModeFromEngine
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaChoiceGroup
@@ -282,6 +284,11 @@ fun MiniPlayer(
     }
 }
 
+/** Synchronous (non-snapshot) scrub flag for [SeekBar]; see its use site. */
+private class ScrubFlag {
+    var active: Boolean = false
+}
+
 /**
  * Expressive seek bar (spec §3/§5/§8): the stateful [SliderState]
  * slider from material3 1.5. Playback position drives the thumb while
@@ -300,15 +307,22 @@ private fun SeekBar(
     val durationSec =
         if (st.durationMs > 0) st.durationMs / 1000 else fallbackDurationSec ?: 0L
     val sliderState: SliderState = rememberSliderState()
-    var scrubbing by remember { mutableStateOf(false) }
+    // Scrub flag as a plain field, NOT Compose state (BUG-2): the
+    // gesture callbacks set it synchronously on the main thread,
+    // while a snapshot-state write only takes effect a recomposition
+    // later. With a state flag, the position effect below could run
+    // inside that gap and write the STALE playedFraction into the
+    // slider mid-gesture — anchoring fast drags back at the
+    // pre-gesture value so the finished seek targeted it too.
+    val scrubbing = remember { ScrubFlag() }
     val playedFraction =
         if (st.durationMs > 0) {
             (st.positionMs.toFloat() / st.durationMs).coerceIn(0f, 1f)
         } else {
             0f
         }
-    LaunchedEffect(playedFraction, scrubbing) {
-        if (!scrubbing) {
+    LaunchedEffect(playedFraction) {
+        if (!scrubbing.active) {
             sliderState.value = playedFraction
         }
     }
@@ -316,12 +330,15 @@ private fun SeekBar(
     Slider(
         state = sliderState,
         onValueChange = {
+            scrubbing.active = true
             sliderState.value = it
-            scrubbing = true
         },
         onValueChangeFinished = {
-            scrubbing = false
-            onSeek((sliderState.value * st.durationMs).toLong())
+            scrubbing.active = false
+            // Seek against the EFFECTIVE duration: st.durationMs can
+            // still be 0 (unknown) while the fallback is known, and
+            // fraction × 0 silently seeked to 0:00.
+            onSeek((sliderState.value * durationSec * 1000).toLong())
         },
         modifier =
             Modifier.semantics {
@@ -743,8 +760,12 @@ private fun PlayerControls(
         IconButton(onClick = { vm.player.next() }) {
             Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
         }
+        // st.repeatMode is the ENGINE value — interpret it ONLY via
+        // the RepeatMode mapping. Reading the raw Int here is what
+        // swapped One/All in the UI (BUG-1: Media3's ONE=1, ALL=2).
+        val repeat = repeatModeFromEngine(st.repeatMode)
         IconToggleButton(
-            checked = st.repeatMode != 0,
+            checked = repeat != RepeatMode.OFF,
             onCheckedChange = { vm.player.cycleRepeat() },
             shapes = transportToggleShapes,
             colors =
@@ -754,15 +775,15 @@ private fun PlayerControls(
             modifier =
                 Modifier.semantics {
                     stateDescription =
-                        when (st.repeatMode) {
-                            1 -> "Repeat all"
-                            2 -> "Repeat one"
-                            else -> "Repeat off"
+                        when (repeat) {
+                            RepeatMode.ONE -> "Repeat one"
+                            RepeatMode.ALL -> "Repeat all"
+                            RepeatMode.OFF -> "Repeat off"
                         }
                 },
         ) {
             Icon(
-                if (st.repeatMode == 2) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
+                if (repeat == RepeatMode.ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
                 contentDescription = "Repeat",
             )
         }
