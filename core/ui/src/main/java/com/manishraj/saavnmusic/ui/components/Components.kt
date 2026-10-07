@@ -186,7 +186,8 @@ fun MediaCard(
         if (circular) {
             CircularArtwork(imageUrl, width - 16, contentDescription = title)
         } else {
-            Artwork(imageUrl, width - 16, OmegaRadius.lg, contentDescription = title)
+            // Card artwork corner = 16dp per the shape language (M3X spec §2.3: rows 12, cards 16, hero 28).
+            Artwork(imageUrl, width - 16, OmegaRadius.xl, contentDescription = title)
         }
         Spacer(Modifier.height(OmegaSpacing.sm))
         Text(
