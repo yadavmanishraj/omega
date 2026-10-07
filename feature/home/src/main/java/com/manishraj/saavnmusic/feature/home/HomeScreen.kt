@@ -44,12 +44,14 @@ import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
+import com.manishraj.saavnmusic.ui.components.InlineErrorRow
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
 import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerList
+import com.manishraj.saavnmusic.ui.components.ShimmerRail
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
@@ -176,7 +178,13 @@ fun HomeScreen(
                     ) {
                         Icon(
                             Icons.Filled.MusicNote,
-                            contentDescription = "Omega",
+                            // Decoration only (polish item 5, R-P4):
+                            // the badge is a brand mark in the avatar
+                            // position, not a destination — a named
+                            // description would announce a dead end to
+                            // assistive tech. The greeting wordmark
+                            // carries the brand.
+                            contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
@@ -200,7 +208,7 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                         Text(
-                            "You're offline — showing downloads & library",
+                            "You're offline. Showing downloads & library",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier =
@@ -322,7 +330,7 @@ fun HomeScreen(
                         }
                         is UiState.Error -> {
                             item { SectionHeader("Trending songs") }
-                            item { ErrorState(s.message, onRetry = { vm.load() }) }
+                            item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
@@ -360,11 +368,11 @@ fun HomeScreen(
                     when (val s = albums) {
                         is UiState.Loading -> {
                             item { SectionHeader("New albums") }
-                            item { ShimmerList() }
+                            item { ShimmerRail() }
                         }
                         is UiState.Error -> {
                             item { SectionHeader("New albums") }
-                            item { ErrorState(s.message, onRetry = { vm.load() }) }
+                            item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
@@ -384,11 +392,11 @@ fun HomeScreen(
                     when (val s = playlists) {
                         is UiState.Loading -> {
                             item { SectionHeader("Playlists for you") }
-                            item { ShimmerList() }
+                            item { ShimmerRail() }
                         }
                         is UiState.Error -> {
                             item { SectionHeader("Playlists for you") }
-                            item { ErrorState(s.message, onRetry = { vm.load() }) }
+                            item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
@@ -408,11 +416,11 @@ fun HomeScreen(
                     when (val s = artists) {
                         is UiState.Loading -> {
                             item { SectionHeader("Artists") }
-                            item { ShimmerList() }
+                            item { ShimmerRail() }
                         }
                         is UiState.Error -> {
                             item { SectionHeader("Artists") }
-                            item { ErrorState(s.message, onRetry = { vm.load() }) }
+                            item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {

@@ -377,6 +377,48 @@ fun ErrorState(
     }
 }
 
+/**
+ * Compact inline error (polish item 10): the per-SECTION failure
+ * treatment. Where [ErrorState] is a full block — 48dp icon, title,
+ * message, filled Retry — for a surface that has nothing else, this
+ * row is one subordinate line inside a feed: small error icon, the
+ * message, a text Retry. It exists so a partial failure (one Home
+ * section down, the rest playing) reads as a footnote to the content
+ * around it, not as several stacked page errors.
+ */
+@Composable
+fun InlineErrorRow(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Outlined.ErrorOutline,
+    actionLabel: String = "Retry",
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.error,
+        )
+        Spacer(Modifier.width(OmegaSpacing.sm))
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry) { Text(actionLabel) }
+    }
+}
+
 /** Empty state with an icon, an explanation and an optional next step. */
 @Composable
 fun EmptyState(

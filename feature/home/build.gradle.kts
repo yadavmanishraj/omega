@@ -13,4 +13,6 @@ dependencies {
 
     // HomeViewModel enqueues downloads directly (row-menu Download).
     implementation(libs.work.runtime)
+
+    testImplementation(libs.junit)
 }
