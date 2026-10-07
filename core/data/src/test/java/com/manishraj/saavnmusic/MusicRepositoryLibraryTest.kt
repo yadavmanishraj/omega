@@ -285,9 +285,9 @@ class MusicRepositoryLibraryTest {
             assertEquals(info.sizeBytes, stored.sizeBytes)
             assertEquals(info.status, stored.status)
             assertEquals(info.progress, stored.progress)
-            // Known gap: registerDownload(DownloadInfo) does not carry
-            // errorMessage into the entity, so the reason is lost here.
-            assertNull(stored.errorMessage)
+            // registerDownload(DownloadInfo) carries errorMessage into the
+            // entity, so an undo-restored FAILED row keeps its reason.
+            assertEquals(info.errorMessage, stored.errorMessage)
         }
 
     @Test

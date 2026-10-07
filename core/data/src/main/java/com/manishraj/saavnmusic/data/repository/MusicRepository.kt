@@ -428,6 +428,7 @@ class MusicRepository
                     info.sizeBytes,
                     info.status,
                     info.progress,
+                    errorMessage = info.errorMessage,
                 ),
             )
 
