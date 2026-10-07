@@ -39,6 +39,7 @@ import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.compactCount
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.GradientHeader
@@ -344,7 +345,7 @@ fun ArtistScreen(
                 item {
                     SongListHeader(
                         a.data.name,
-                        listOfNotNull(a.data.followers?.let { "$it followers" }).joinToString(),
+                        listOfNotNull(a.data.followers?.let { "${compactCount(it)} followers" }).joinToString(),
                         a.data.imageUrl,
                         a.data.bio,
                         onBack,

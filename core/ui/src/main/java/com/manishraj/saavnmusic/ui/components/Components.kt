@@ -67,6 +67,24 @@ import kotlinx.coroutines.delay
  */
 fun songCountLabel(count: Int): String = if (count == 1) "1 song" else "$count songs"
 
+/**
+ * Compact count for large audience numbers (e.g. artist followers):
+ * 950 → "950", 12_300 → "12.3K", 107_959_415 → "108M". Trailing ".0" is
+ * dropped. (Raw interpolation rendered "107959415 followers".)
+ */
+fun compactCount(count: Long): String {
+    fun scaled(value: Double, suffix: String): String {
+        val text = if (value % 1.0 == 0.0) value.toLong().toString() else String.format(java.util.Locale.US, "%.1f", value)
+        return text + suffix
+    }
+    return when {
+        count < 1_000 -> count.toString()
+        count < 1_000_000 -> scaled(count / 1_000.0, "K")
+        count < 1_000_000_000 -> scaled(count / 1_000_000.0, "M")
+        else -> scaled(count / 1_000_000_000.0, "B")
+    }
+}
+
 @Composable
 fun Artwork(
     url: String?,
