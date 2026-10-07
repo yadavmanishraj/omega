@@ -164,6 +164,87 @@ class MusicRepositoryLibraryTest {
         }
 
     @Test
+    fun deletePlaylistWithSnapshotRemovesPlaylistAndMemberships() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            val otherId = repo.createPlaylist("Other")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b"))
+            repo.addToPlaylist(otherId, song("a"))
+
+            val deleted = repo.deletePlaylistWithSnapshot(playlistId)
+
+            // The snapshot keeps the whole playlist: identity, name,
+            // and every membership at its stored position.
+            assertEquals(playlistId, deleted?.id)
+            assertEquals("Mix", deleted?.name)
+            assertEquals(listOf("a", "b"), deleted?.songs?.map { it.song.id })
+            assertEquals(listOf(0, 1), deleted?.songs?.map { it.position })
+            assertTrue(deleted?.songs?.all { it.playlistId == playlistId } == true)
+
+            // The playlist AND its membership rows are gone (no
+            // orphans for a later id to inherit); the other playlist
+            // and its membership of the same song are untouched.
+            assertEquals(listOf("Other"), repo.localPlaylists.first().map { it.name })
+            assertTrue(dao.playlistSongRows(playlistId).isEmpty())
+            assertEquals(listOf("a"), dao.playlistSongRows(otherId).map { it.songId })
+        }
+
+    @Test
+    fun restorePlaylistReInsertsTheExactPreDeleteState() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b").copy(durationSec = 187L))
+            repo.addToPlaylist(playlistId, song("c"))
+            val createdAt = dao.playlist(playlistId)?.createdAt
+
+            val deleted = repo.deletePlaylistWithSnapshot(playlistId)!!
+            assertTrue(repo.localPlaylists.first().isEmpty())
+            repo.restorePlaylist(deleted)
+
+            // Same id, name, and creation time (the list orders by
+            // createdAt, so the playlist returns to its own slot).
+            val playlists = repo.localPlaylists.first()
+            assertEquals(1, playlists.size)
+            assertEquals(playlistId, playlists[0].id)
+            assertEquals("Mix", playlists[0].name)
+            assertEquals(3, playlists[0].songCount)
+            assertEquals(createdAt, dao.playlist(playlistId)?.createdAt)
+            assertEquals(deleted.createdAt, dao.playlist(playlistId)?.createdAt)
+
+            // Same songs, same order, same stored positions, and the
+            // per-song snapshots (duration included) survive.
+            val rows = dao.playlistSongRows(playlistId)
+            assertEquals(listOf("a", "b", "c"), rows.map { it.songId })
+            assertEquals(listOf(0, 1, 2), rows.map { it.position })
+            assertEquals(listOf(200L, 187L, 200L), rows.map { it.durationSec })
+        }
+
+    @Test
+    fun deletePlaylistWithSnapshotForMissingPlaylistReturnsNull() =
+        runTest {
+            assertNull(repo.deletePlaylistWithSnapshot(4242L))
+        }
+
+    @Test
+    fun restoredPlaylistAcceptsAppendsAtTheNextPosition() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b"))
+
+            repo.restorePlaylist(repo.deletePlaylistWithSnapshot(playlistId)!!)
+            repo.addToPlaylist(playlistId, song("c"))
+
+            // The restore leaves the playlist fully live: positions
+            // continue from the restored membership count.
+            val rows = dao.playlistSongRows(playlistId)
+            assertEquals(listOf("a", "b", "c"), rows.map { it.songId })
+            assertEquals(listOf(0, 1, 2), rows.map { it.position })
+        }
+
+    @Test
     fun removeFromPlaylistDeletesOnlyThatMembership() =
         runTest {
             val firstId = repo.createPlaylist("One")

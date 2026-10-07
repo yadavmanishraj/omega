@@ -2,6 +2,7 @@ package com.manishraj.saavnmusic
 
 import android.content.ContextWrapper
 import com.manishraj.saavnmusic.data.remote.JioSaavnClient
+import com.manishraj.saavnmusic.data.repository.DeletedPlaylist
 import com.manishraj.saavnmusic.data.repository.MusicRepository
 import com.manishraj.saavnmusic.data.repository.RemovedPlaylistSong
 import com.manishraj.saavnmusic.data.settings.SettingsRepository
@@ -178,6 +179,32 @@ class LibraryViewModelTest {
             vm.restoreToPlaylist(removed!!)
             advanceUntilIdle()
             assertEquals(listOf("a", "b", "c"), repo.playlistSongs(playlistId).first().map { it.id })
+        }
+
+    @Test
+    fun deletePlaylistWithUndoDelegatesAndRestoreBringsBackThePlaylist() =
+        runTest(dispatcher) {
+            val vm = viewModel()
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b"))
+            val playlist = repo.localPlaylists.first().single()
+
+            var deleted: DeletedPlaylist? = null
+            vm.deletePlaylistWithUndo(playlist) { deleted = it }
+            advanceUntilIdle()
+            assertEquals(playlistId, deleted?.id)
+            assertEquals(listOf("a", "b"), deleted?.songs?.map { it.song.id })
+            assertTrue(repo.localPlaylists.first().isEmpty())
+            assertTrue(repo.playlistSongs(playlistId).first().isEmpty())
+
+            vm.restorePlaylist(deleted!!)
+            advanceUntilIdle()
+            val restored = repo.localPlaylists.first().single()
+            assertEquals(playlistId, restored.id)
+            assertEquals("Mix", restored.name)
+            assertEquals(2, restored.songCount)
+            assertEquals(listOf("a", "b"), repo.playlistSongs(playlistId).first().map { it.id })
         }
 
     @Test

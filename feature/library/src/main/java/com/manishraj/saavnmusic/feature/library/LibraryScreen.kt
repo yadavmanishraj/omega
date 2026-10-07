@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +63,8 @@ import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
+import com.manishraj.saavnmusic.ui.components.OmegaDestructiveConfirmDialog
+import com.manishraj.saavnmusic.ui.components.OmegaSegmentedContainer
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedListItem
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
@@ -118,29 +119,6 @@ private fun <T> sorted(
         SortMode.OLDEST -> list.reversed()
         SortMode.A_Z -> list.sortedBy { name(it).lowercase() }
     }
-
-/**
- * One filled segment of a Library list (M3 Expressive spec §3/§5):
- * the same surfaceContainerHigh + large-shape treatment as
- * [OmegaSegmentedListItem], wrapping rows whose content is richer
- * than the item's headline/supporting strings — [SongRow] (its
- * protected duration slot is a Phase B guarantee) and the Downloads
- * row (progress / error affordances). Lists separate segments by
- * the kit's 2dp gap; grouping is carried by containment, not
- * dividers.
- */
-@Composable
-internal fun SegmentedSegment(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.large,
-        modifier = modifier,
-        content = content,
-    )
-}
 
 /**
  * Library (REDESIGN_SPEC §6 + M3 Expressive spec §5): all-local
@@ -233,7 +211,7 @@ fun LibraryScreen(
                 Column(Modifier.weight(1f)) {
                     Text("Library", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "On this device — no account, nothing uploaded.",
+                        "On this device. No account, nothing uploaded.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -345,7 +323,7 @@ fun LibraryScreen(
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             items(ordered, key = { it.id }) { song ->
-                                SegmentedSegment(Modifier.animateItem()) {
+                                OmegaSegmentedContainer(Modifier.animateItem()) {
                                     SongRow(
                                         song,
                                         { onPlayQueue(ordered, ordered.indexOf(song)) },
@@ -407,7 +385,7 @@ fun LibraryScreen(
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
                                 items(ordered, key = { it.songId }) { d ->
-                                    SegmentedSegment(Modifier.animateItem()) {
+                                    OmegaSegmentedContainer(Modifier.animateItem()) {
                                         ListItem(
                                             modifier =
                                                 if (d.status == "COMPLETED") {
@@ -507,11 +485,49 @@ fun LibraryScreen(
                                             },
                                             leadingContent = { Artwork(d.imageUrl, contentDescription = d.name) },
                                             trailingContent = {
-                                                IconButton(onClick = { pendingDelete = d }) {
-                                                    Icon(
-                                                        Icons.Filled.Delete,
-                                                        contentDescription = "Delete download ${d.name}",
+                                                // Downloads rows carry the shared
+                                                // song menu like every other song
+                                                // row (polish item 18); Delete
+                                                // download keeps its own button
+                                                // and confirm flow beside it. A
+                                                // COMPLETED row offers no Download
+                                                // entry — the song is already on
+                                                // the device; other statuses can
+                                                // (re)enqueue from the menu.
+                                                val song = d.toSong()
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    SongOverflowMenuButton(
+                                                        song = song,
+                                                        isFavorite = favs.any { it.id == d.songId },
+                                                        onPlayNext = {
+                                                            snackbar?.showMessage(
+                                                                playNextMessage(vm.playNext(song), song.name),
+                                                            )
+                                                        },
+                                                        onDownload =
+                                                            if (d.status == "COMPLETED") {
+                                                                null
+                                                            } else {
+                                                                {
+                                                                    vm.download(song)
+                                                                    snackbar?.showMessage("Download queued")
+                                                                    onDownloadEnqueued()
+                                                                }
+                                                            },
+                                                        onToggleFavorite = {
+                                                            vm.toggleFavorite(
+                                                                song,
+                                                                favs.any { it.id == d.songId },
+                                                            )
+                                                        },
+                                                        onAddToPlaylist = { playlistTarget = song },
                                                     )
+                                                    IconButton(onClick = { pendingDelete = d }) {
+                                                        Icon(
+                                                            Icons.Filled.Delete,
+                                                            contentDescription = "Delete download ${d.name}",
+                                                        )
+                                                    }
                                                 }
                                             },
                                             colors =
@@ -529,7 +545,7 @@ fun LibraryScreen(
                     if (hist.isEmpty()) {
                         EmptyState(
                             "Nothing played yet",
-                            "What you play shows up here — only on this device.",
+                            "What you play shows up here, only on this device.",
                         )
                     } else {
                         val ordered = sorted(hist, sortMode) { it.name }
@@ -539,7 +555,7 @@ fun LibraryScreen(
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             items(ordered, key = { it.id }) { song ->
-                                SegmentedSegment(Modifier.animateItem()) {
+                                OmegaSegmentedContainer(Modifier.animateItem()) {
                                     SongRow(
                                         song,
                                         { onPlayQueue(ordered, ordered.indexOf(song)) },
@@ -618,6 +634,7 @@ fun LibraryScreen(
     playlistTarget?.let { song ->
         PlaylistPickerDialog(
             playlists = pls,
+            targetSong = song,
             onPick = { playlist ->
                 vm.addToPlaylist(playlist.id, song)
                 playlistTarget = null
@@ -633,68 +650,59 @@ fun LibraryScreen(
     }
 
     if (confirmClearHistory) {
-        AlertDialog(
-            onDismissRequest = { confirmClearHistory = false },
-            title = { Text("Clear history?") },
-            text = { Text("Your listening history on this device will be removed. This can't be undone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.clearHistory()
-                    confirmClearHistory = false
-                }) { Text("Clear", color = MaterialTheme.colorScheme.error) }
+        OmegaDestructiveConfirmDialog(
+            title = "Clear history?",
+            text = "Your listening history on this device will be removed. This can't be undone.",
+            confirmLabel = "Clear",
+            onConfirm = {
+                vm.clearHistory()
+                confirmClearHistory = false
             },
-            dismissButton = {
-                TextButton(onClick = { confirmClearHistory = false }) { Text("Cancel") }
-            },
+            onDismiss = { confirmClearHistory = false },
         )
     }
 
     pendingDelete?.let { d ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("Delete download?") },
-            text = { Text("“${d.name}” and its file will be removed from this device.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingDelete = null
-                    vm.deleteDownload(d)
-                    snackbar?.showMessage(
-                        "Download deleted",
-                        actionLabel = "Undo",
-                        onAction = {
-                            vm.retryDownload(d)
-                            onDownloadEnqueued()
-                        },
-                    )
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+        OmegaDestructiveConfirmDialog(
+            title = "Delete download?",
+            text = "“${d.name}” and its file will be removed from this device.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                pendingDelete = null
+                vm.deleteDownload(d)
+                snackbar?.showMessage(
+                    "Download deleted",
+                    actionLabel = "Undo",
+                    onAction = {
+                        vm.retryDownload(d)
+                        onDownloadEnqueued()
+                    },
+                )
             },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
-            },
+            onDismiss = { pendingDelete = null },
         )
     }
 
-    // Playlist delete is destructive and NOT undoable (the VM has no
-    // restore path for a playlist + its membership), so per spec §7 it
-    // is confirm-first with an error-colored action, then a
-    // message-only snackbar — no fake Undo.
+    // Playlist delete follows the same Library grammar as every
+    // other delete (polish item 1): confirm first, then an Undo
+    // snackbar — the VM snapshots the playlist and its memberships
+    // and restores them exactly if the user undoes.
     pendingDeletePlaylist?.let { p ->
-        AlertDialog(
-            onDismissRequest = { pendingDeletePlaylist = null },
-            title = { Text("Delete playlist?") },
-            text = {
-                Text("“${p.name}” will be removed from this device. The songs stay in your library. This can't be undone.")
+        OmegaDestructiveConfirmDialog(
+            title = "Delete playlist?",
+            text = "“${p.name}” will be removed from this device. The songs stay in your library.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                pendingDeletePlaylist = null
+                vm.deletePlaylistWithUndo(p) { deleted ->
+                    snackbar?.showMessage(
+                        "Playlist deleted",
+                        actionLabel = "Undo",
+                        onAction = { vm.restorePlaylist(deleted) },
+                    )
+                }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingDeletePlaylist = null
-                    vm.deletePlaylist(p.id)
-                    snackbar?.showMessage("Playlist deleted")
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeletePlaylist = null }) { Text("Cancel") }
-            },
+            onDismiss = { pendingDeletePlaylist = null },
         )
     }
 

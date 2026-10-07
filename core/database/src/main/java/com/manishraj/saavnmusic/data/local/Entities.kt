@@ -154,6 +154,9 @@ data class LocalPlaylistRow(
 
     @Insert suspend fun createPlaylist(e: LocalPlaylistEntity): Long
 
+    @Query("SELECT * FROM local_playlists WHERE id=:id")
+    suspend fun playlist(id: Long): LocalPlaylistEntity?
+
     @Query("DELETE FROM local_playlists WHERE id=:id")
     suspend fun deletePlaylist(id: Long)
 
@@ -174,6 +177,13 @@ data class LocalPlaylistRow(
 
     @Query("SELECT COUNT(*) FROM local_playlist_songs WHERE playlistId=:id")
     suspend fun playlistSongCount(id: Long): Int
+
+    /** One-shot membership read for the playlist snapshot/restore path (delete Undo). */
+    @Query("SELECT * FROM local_playlist_songs WHERE playlistId=:id ORDER BY position")
+    suspend fun playlistSongRows(id: Long): List<LocalPlaylistSongEntity>
+
+    @Query("DELETE FROM local_playlist_songs WHERE playlistId=:id")
+    suspend fun deletePlaylistSongs(id: Long)
 
     @Query("SELECT * FROM local_playlist_songs WHERE playlistId=:id ORDER BY position")
     fun playlistSongs(id: Long): kotlinx.coroutines.flow.Flow<List<LocalPlaylistSongEntity>>

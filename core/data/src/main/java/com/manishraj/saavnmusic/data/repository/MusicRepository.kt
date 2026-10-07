@@ -342,6 +342,60 @@ class MusicRepository
         suspend fun deletePlaylist(id: Long) = dao.deletePlaylist(id)
 
         /**
+         * Deletes playlist [id] WITH its membership rows and returns
+         * a whole-playlist snapshot for the Undo snackbar, or null
+         * when no such playlist exists. Membership rows are deleted
+         * with their playlist: leaving them orphaned would let a
+         * later playlist that reuses the id inherit songs it never
+         * had. The snapshot keeps everything [restorePlaylist] needs
+         * to land the playlist exactly as it was — same id, name,
+         * creation time (the list orders by it), and every membership
+         * at its stored position.
+         */
+        suspend fun deletePlaylistWithSnapshot(id: Long): DeletedPlaylist? {
+            val playlist = dao.playlist(id) ?: return null
+            val rows = dao.playlistSongRows(id)
+            dao.deletePlaylistSongs(id)
+            dao.deletePlaylist(id)
+            return DeletedPlaylist(
+                id = playlist.id,
+                name = playlist.name,
+                createdAt = playlist.createdAt,
+                songs = rows.map { RemovedPlaylistSong(id, it.toSong(), it.position) },
+            )
+        }
+
+        /**
+         * Undo for [deletePlaylistWithSnapshot]: re-inserts the
+         * playlist under its ORIGINAL id and creation time, then
+         * every membership at its original position — the exact
+         * pre-delete state, not a re-created look-alike.
+         */
+        suspend fun restorePlaylist(deleted: DeletedPlaylist) {
+            dao.createPlaylist(
+                LocalPlaylistEntity(
+                    id = deleted.id,
+                    name = deleted.name,
+                    createdAt = deleted.createdAt,
+                ),
+            )
+            deleted.songs.forEach { removed ->
+                dao.addToPlaylist(
+                    LocalPlaylistSongEntity(
+                        removed.playlistId,
+                        removed.song.id,
+                        removed.song.name,
+                        removed.song.artist,
+                        removed.song.imageUrl,
+                        removed.song.streamUrl,
+                        removed.position,
+                        removed.song.durationSec,
+                    ),
+                )
+            }
+        }
+
+        /**
          * Appends a song to a local playlist (position = current size,
          * so playlist order is insertion order). Re-adding a song that
          * is already in the playlist replaces its snapshot in place.
@@ -502,6 +556,21 @@ data class RemovedPlaylistSong(
     val playlistId: Long,
     val song: Song,
     val position: Int,
+)
+
+/**
+ * A whole playlist removed by
+ * [MusicRepository.deletePlaylistWithSnapshot], kept whole so the
+ * caller can hand it back to [MusicRepository.restorePlaylist] (the
+ * snackbar Undo) and land the playlist exactly as it was: same [id],
+ * same [createdAt] (the Playlists list orders by it), and every
+ * membership in [songs] at its stored position.
+ */
+data class DeletedPlaylist(
+    val id: Long,
+    val name: String,
+    val createdAt: Long,
+    val songs: List<RemovedPlaylistSong>,
 )
 
 // Entity -> domain mappers. Snapshots stored in Room carry a single

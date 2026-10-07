@@ -122,10 +122,15 @@ class FakeLibraryDao : LibraryDao {
         }
 
     override suspend fun createPlaylist(e: LocalPlaylistEntity): Long {
-        val id = nextPlaylistId++
+        // Room semantics: a preset (non-zero) id is inserted as-is —
+        // the playlist-restore path depends on it; id 0 auto-generates.
+        val id = if (e.id != 0L) e.id else nextPlaylistId++
+        if (id >= nextPlaylistId) nextPlaylistId = id + 1
         playlistsState.value = playlistsState.value + e.copy(id = id)
         return id
     }
+
+    override suspend fun playlist(id: Long): LocalPlaylistEntity? = playlistsState.value.firstOrNull { it.id == id }
 
     override suspend fun deletePlaylist(id: Long) {
         playlistsState.value = playlistsState.value.filterNot { it.id == id }
@@ -152,6 +157,13 @@ class FakeLibraryDao : LibraryDao {
     }
 
     override suspend fun playlistSongCount(id: Long): Int = playlistSongsState.value.count { it.playlistId == id }
+
+    override suspend fun playlistSongRows(id: Long): List<LocalPlaylistSongEntity> =
+        playlistSongsState.value.filter { it.playlistId == id }.sortedBy { it.position }
+
+    override suspend fun deletePlaylistSongs(id: Long) {
+        playlistSongsState.value = playlistSongsState.value.filterNot { it.playlistId == id }
+    }
 
     override fun playlistSongs(id: Long): Flow<List<LocalPlaylistSongEntity>> =
         playlistSongsState.map { rows ->

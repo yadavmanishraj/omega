@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
+import com.manishraj.saavnmusic.data.repository.DeletedPlaylist
 import com.manishraj.saavnmusic.data.repository.MusicRepository
 import com.manishraj.saavnmusic.data.repository.RemovedPlaylistSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
@@ -43,8 +44,25 @@ class LibraryViewModel
             viewModelScope.launch { repo.createPlaylist(name) }
         }
 
-        fun deletePlaylist(id: Long) {
-            viewModelScope.launch { repo.deletePlaylist(id) }
+        /**
+         * Deletes local playlist [playlist] together with its
+         * memberships (polish item 1: whole-playlist delete joins
+         * every other Library delete in offering Undo). [onDeleted]
+         * receives the snapshot so the caller can offer Undo;
+         * [restorePlaylist] puts the playlist back exactly as it was.
+         */
+        fun deletePlaylistWithUndo(
+            playlist: LocalPlaylist,
+            onDeleted: (DeletedPlaylist) -> Unit,
+        ) {
+            viewModelScope.launch {
+                repo.deletePlaylistWithSnapshot(playlist.id)?.let(onDeleted)
+            }
+        }
+
+        /** Undo for [deletePlaylistWithUndo] — exact-state restore. */
+        fun restorePlaylist(deleted: DeletedPlaylist) {
+            viewModelScope.launch { repo.restorePlaylist(deleted) }
         }
 
         fun clearHistory() {
