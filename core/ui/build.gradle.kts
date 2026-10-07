@@ -14,4 +14,5 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.palette.ktx)
 }
