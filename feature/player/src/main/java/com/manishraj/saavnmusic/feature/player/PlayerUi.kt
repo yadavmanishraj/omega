@@ -105,6 +105,7 @@ import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaFavoriteIcon
 import com.manishraj.saavnmusic.ui.components.OmegaPlayPauseIcon
+import com.manishraj.saavnmusic.ui.components.OmegaSegmentedContainer
 import com.manishraj.saavnmusic.ui.components.animatePaletteColor
 import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
 import com.manishraj.saavnmusic.ui.components.safeGradientEnd
@@ -1110,37 +1111,33 @@ private fun PlayerControls(
     if (showLyrics) {
         Spacer(Modifier.height(OmegaSpacing.md))
         // Lyrics containment (polish item 25): the block joins the
-        // app's segmented grammar: a filled surface with a
-        // "Lyrics" header, instead of bare text appended under
-        // the controls. Hand-rolled in the SettingsSegment /
-        // SettingsCard grammar (surfaceContainerHigh +
-        // shapes.large, primary header) because the kit has no
-        // free-form segmented container at this base; adopt
-        // OmegaSegmentedContainer here when it lands.
-        Surface(
+        // app's segmented grammar — the kit's OmegaSegmentedContainer
+        // with a "Lyrics" header — instead of bare text appended
+        // under the controls. (Hand-rolled in that grammar at this
+        // branch's original base, where the kit had no free-form
+        // segmented container; adopted the kit container once P0
+        // landed it — P5 review finding I-1.)
+        OmegaSegmentedContainer(
             Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = MaterialTheme.shapes.large,
+            contentPadding = PaddingValues(OmegaSpacing.lg),
         ) {
-            Column(Modifier.padding(OmegaSpacing.lg)) {
-                Text(
-                    "Lyrics",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(OmegaSpacing.md))
-                Text(
-                    text =
-                        when {
-                            lyrics != null -> lyrics!!
-                            !lyricsLoaded -> "Loading lyrics…"
-                            // The lyrics call is the test (validation §3):
-                            // a null result after it completes means none.
-                            else -> "No lyrics available for this song"
-                        },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+            Text(
+                "Lyrics",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(OmegaSpacing.md))
+            Text(
+                text =
+                    when {
+                        lyrics != null -> lyrics!!
+                        !lyricsLoaded -> "Loading lyrics…"
+                        // The lyrics call is the test (validation §3):
+                        // a null result after it completes means none.
+                        else -> "No lyrics available for this song"
+                    },
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         // Clearance (F-09): the lyrics block is the column's last
         // content; without tail room its last line can sit under the
