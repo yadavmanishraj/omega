@@ -121,12 +121,19 @@ class SearchViewModelTest {
         }
     }
 
+    /** `songs` STARTS as Success(emptyList()), so "is Success" is no
+     * completion signal — a search has landed when its last write
+     * (the playlists holder, set just before the Recents write) shows
+     * the fake upstream's playlist. */
+    private suspend fun SearchViewModel.awaitSearchLanded() =
+        awaitCondition("search landed") { playlists.value.map { it.id } == listOf("pl1") }
+
     @Test
     fun submitSearchPopulatesEveryTabAndRecordsRecent() =
         runBlocking {
             val vm = viewModel()
             vm.search("arijit")
-            awaitCondition("songs success") { vm.songs.value is UiState.Success }
+            vm.awaitSearchLanded()
 
             val songs = (vm.songs.value as UiState.Success).data
             assertEquals(listOf("s1"), songs.map { it.id })
@@ -146,7 +153,7 @@ class SearchViewModelTest {
             // landed in Recent searches; only explicit submits did.
             val vm = viewModel()
             vm.onQueryChange("lofi")
-            awaitCondition("debounced songs success") { vm.songs.value is UiState.Success }
+            vm.awaitSearchLanded()
             assertEquals("lofi", vm.searchedQuery.value)
             awaitCondition("recent recorded") { repo.recentSearches.first() == listOf("lofi") }
         }
@@ -160,7 +167,8 @@ class SearchViewModelTest {
             // query. The failure must own every result holder.
             val vm = viewModel()
             vm.search("good")
-            awaitCondition("initial success") { vm.songs.value is UiState.Success }
+            vm.awaitSearchLanded()
+            awaitCondition("recent recorded") { repo.recentSearches.first() == listOf("good") }
             assertTrue(vm.albums.value.isNotEmpty())
             assertTrue(vm.topResults.value.isNotEmpty())
 
