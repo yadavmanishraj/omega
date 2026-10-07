@@ -99,6 +99,52 @@ class MusicRepositoryLibraryTest {
         }
 
     @Test
+    fun playlistAddPersistsDurationSecAndMappingCarriesIt() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a")) // helper duration: 200s
+            repo.addToPlaylist(playlistId, song("b").copy(durationSec = 187L))
+            repo.addToPlaylist(playlistId, song("c").copy(durationSec = null))
+
+            // The stored rows carry each song's duration (schema v3);
+            // a song whose duration is unknown stores null, NOT 0 —
+            // the row UI hides the segment for unknown durations.
+            val rows = dao.playlistSongs(playlistId).first()
+            assertEquals(listOf(200L, 187L, null), rows.map { it.durationSec })
+
+            // …and the entity→Song mapping carries it through, so
+            // LocalPlaylistDetail rows render "Artist • m:ss" at parity
+            // with every other song list.
+            val songs = repo.playlistSongs(playlistId).first()
+            assertEquals(listOf(200L, 187L, null), songs.map { it.durationSec })
+        }
+
+    @Test
+    fun undoRestoreKeepsDurationSec() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b"))
+
+            // Remove + exact-position Undo goes through removeFromPlaylist
+            // (snapshot via toSong()) and restoreToPlaylist; the duration
+            // must survive the round trip, not just the direct add.
+            val removed = repo.removeFromPlaylist(playlistId, song("a"))
+            repo.restoreToPlaylist(removed!!)
+
+            val row = dao.playlistSongs(playlistId).first().first { it.songId == "a" }
+            assertEquals(200L, row.durationSec)
+            assertEquals(
+                200L,
+                repo
+                    .playlistSongs(playlistId)
+                    .first()
+                    .first { it.id == "a" }
+                    .durationSec,
+            )
+        }
+
+    @Test
     fun localPlaylistsFlowReflectsCreatesCountsAndDelete() =
         runTest {
             val playlistId = repo.createPlaylist("Road Trip")

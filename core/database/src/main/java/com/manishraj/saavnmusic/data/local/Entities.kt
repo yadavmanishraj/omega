@@ -65,6 +65,12 @@ data class LocalPlaylistSongEntity(
     val imageUrl: String?,
     val streamUrl: String?,
     val position: Int = 0,
+    // Added in schema v3 (kept last: the 2->3 migration appends the
+    // column with ALTER TABLE ... ADD COLUMN, matching this position).
+    // Nullable: rows written by v2 installs have no duration on disk —
+    // null means "unknown", and the row UI hides the duration segment,
+    // exactly how a null Song.durationSec renders everywhere else.
+    val durationSec: Long? = null,
 )
 
 /** Projection row for the playlist list (playlist + its song count). */
@@ -182,7 +188,7 @@ data class LocalPlaylistRow(
         LocalPlaylistEntity::class,
         LocalPlaylistSongEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -198,5 +204,20 @@ val MIGRATION_1_2 =
     object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE downloads ADD COLUMN errorMessage TEXT")
+        }
+    }
+
+/**
+ * Schema 2 -> 3: local playlist songs gain a nullable `durationSec`
+ * so playlist rows can show "Artist • m:ss" like every other song
+ * list (the entity simply never stored it before — the A17 fix wave
+ * deferred this as its one known gap). Purely additive — every v2
+ * row survives untouched, its duration reading as unknown (NULL)
+ * until the song is re-added.
+ */
+val MIGRATION_2_3 =
+    object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE local_playlist_songs ADD COLUMN durationSec INTEGER")
         }
     }

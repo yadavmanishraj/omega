@@ -1,17 +1,21 @@
 package com.manishraj.saavnmusic.feature.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -30,12 +34,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
+import com.manishraj.saavnmusic.ui.components.GradientHeader
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaActionGroup
 import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
@@ -98,7 +106,14 @@ fun LocalPlaylistDetailScreen(
     )
 }
 
-/** Back arrow + name + count — the header local playlists share with remote Detail (F-19). */
+/**
+ * Back arrow + name + count for the UNRESOLVED state only (playlist
+ * still loading, or gone with the pop already queued): the gradient
+ * header needs the playlist, so this plain bar — the role Detail's
+ * DetailBackBar plays for its Loading/Error states — keeps the back
+ * affordance on screen. Resolved playlists get the full gradient
+ * header below (LocalPlaylistDetailHeader).
+ */
 @Composable
 private fun PlaylistDetailHeader(
     name: String?,
@@ -151,84 +166,109 @@ private fun LocalPlaylistDetailContent(
     val favs by vm.favorites.collectAsState()
     val snackbar = LocalOmegaSnackbar.current
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        PlaylistDetailHeader(name = playlist.name, songCount = playlist.songCount, onBack = onBack)
+    // Distinct artworks in playlist order drive the header cover
+    // (single art or 2x2 mosaic) and the gradient's palette seed.
+    val coverArtworks =
+        remember(songs) { songs.mapNotNull { it.imageUrl }.distinct().take(4) }
+    // One scrolling list, header first — the remote Detail shape:
+    // the gradient header scrolls away with the songs instead of
+    // pinning a second, plainer bar above them.
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        item {
+            LocalPlaylistDetailHeader(
+                playlist = playlist,
+                coverArtworks = coverArtworks,
+                onBack = onBack,
+            )
+        }
         when {
             !songsResolved ->
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    OmegaLoadingIndicator(contentDescription = "Loading playlist")
+                item {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OmegaLoadingIndicator(contentDescription = "Loading playlist")
+                    }
                 }
 
             songs.isEmpty() ->
-                EmptyState(
-                    "No songs yet",
-                    // F-27: no glyph-dependent copy — spell the path out.
-                    "Find a song anywhere in the app, open its menu, and choose Add to playlist.",
-                )
+                item {
+                    EmptyState(
+                        "No songs yet",
+                        // F-27: no glyph-dependent copy — spell the path out.
+                        "Find a song anywhere in the app, open its menu, and choose Add to playlist.",
+                    )
+                }
 
-            else ->
-                LazyColumn(
-                    contentPadding =
-                        PaddingValues(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    item {
-                        // Play all / Shuffle, the remote Detail action
-                        // cluster (F-19). The horizontal scroll is the
-                        // same font-2.0 guard Detail uses: labels
-                        // scroll, never crush.
-                        OmegaActionGroup(
-                            primaryLabel = "Play all",
-                            onPrimary = { onPlayQueue(songs, 0) },
-                            secondaryLabel = "Shuffle",
-                            onSecondary = { onPlayQueue(songs.shuffled(), 0) },
-                            primaryIcon = Icons.Filled.PlayArrow,
-                            secondaryIcon = Icons.Filled.Shuffle,
-                            modifier =
-                                Modifier
-                                    .padding(vertical = OmegaSpacing.sm)
-                                    .horizontalScroll(rememberScrollState()),
+            else -> {
+                item {
+                    // Play all / Shuffle, the remote Detail action
+                    // cluster (F-19). The horizontal scroll is the
+                    // same font-2.0 guard Detail uses: labels
+                    // scroll, never crush.
+                    OmegaActionGroup(
+                        primaryLabel = "Play all",
+                        onPrimary = { onPlayQueue(songs, 0) },
+                        secondaryLabel = "Shuffle",
+                        onSecondary = { onPlayQueue(songs.shuffled(), 0) },
+                        primaryIcon = Icons.Filled.PlayArrow,
+                        secondaryIcon = Icons.Filled.Shuffle,
+                        modifier =
+                            Modifier
+                                .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm)
+                                .horizontalScroll(rememberScrollState()),
+                    )
+                }
+                items(songs, key = { it.id }) { song ->
+                    val songIsFavorite = favs.any { it.id == song.id }
+                    SegmentedSegment(
+                        Modifier
+                            .animateItem()
+                            .padding(horizontal = OmegaSpacing.lg),
+                    ) {
+                        SongRow(
+                            song,
+                            { onPlayQueue(songs, songs.indexOf(song)) },
+                            trailing = {
+                                SongOverflowMenuButton(
+                                    song = song,
+                                    isFavorite = songIsFavorite,
+                                    onPlayNext = {
+                                        snackbar?.showMessage(
+                                            playNextMessage(vm.playNext(song), song.name),
+                                        )
+                                    },
+                                    onDownload = {
+                                        vm.download(song)
+                                        // F-04: Library downloads announce
+                                        // exactly like Home's.
+                                        snackbar?.showMessage("Download queued")
+                                        onDownloadEnqueued()
+                                    },
+                                    onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                    onRemoveFromPlaylist = {
+                                        vm.removeFromPlaylist(playlist.id, song) { removed ->
+                                            snackbar?.showMessage(
+                                                "Removed from ${playlist.name}",
+                                                actionLabel = "Undo",
+                                                onAction = { vm.restoreToPlaylist(removed) },
+                                            )
+                                        }
+                                    },
+                                    onAddToPlaylist = { playlistTarget = song },
+                                )
+                            },
                         )
                     }
-                    items(songs, key = { it.id }) { song ->
-                        val songIsFavorite = favs.any { it.id == song.id }
-                        SegmentedSegment(Modifier.animateItem()) {
-                            SongRow(
-                                song,
-                                { onPlayQueue(songs, songs.indexOf(song)) },
-                                trailing = {
-                                    SongOverflowMenuButton(
-                                        song = song,
-                                        isFavorite = songIsFavorite,
-                                        onPlayNext = {
-                                            snackbar?.showMessage(
-                                                playNextMessage(vm.playNext(song), song.name),
-                                            )
-                                        },
-                                        onDownload = {
-                                            vm.download(song)
-                                            // F-04: Library downloads announce
-                                            // exactly like Home's.
-                                            snackbar?.showMessage("Download queued")
-                                            onDownloadEnqueued()
-                                        },
-                                        onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
-                                        onRemoveFromPlaylist = {
-                                            vm.removeFromPlaylist(playlist.id, song) { removed ->
-                                                snackbar?.showMessage(
-                                                    "Removed from ${playlist.name}",
-                                                    actionLabel = "Undo",
-                                                    onAction = { vm.restoreToPlaylist(removed) },
-                                                )
-                                            }
-                                        },
-                                        onAddToPlaylist = { playlistTarget = song },
-                                    )
-                                },
-                            )
-                        }
-                    }
                 }
+                item { Spacer(Modifier.height(OmegaSpacing.sm)) }
+            }
         }
     }
 
@@ -248,4 +288,103 @@ private fun LocalPlaylistDetailContent(
             onDismiss = { playlistTarget = null },
         )
     }
+}
+
+/**
+ * Corner for the header cover: the shape language's extraLarge
+ * slot (28dp — `OmegaShapes.extraLarge`), matching the remote
+ * Detail header and the player hero. [Artwork] takes a Dp corner,
+ * so the value is spelled out here; the two must move together.
+ */
+private val HeaderArtworkCorner = 28.dp
+
+/**
+ * The gradient detail header, at parity with remote Album/Playlist
+ * detail (critique P1): the shared [GradientHeader] (palette derived
+ * from the cover, contrast-checked content color, back affordance
+ * inside the gradient), a centered cover, the playlist name as the
+ * header title, and the scoped subtitle "Playlist · N songs" — the
+ * F-20 form remote playlist headers use, built from the playlist
+ * row's own count. Local playlists have no upstream description,
+ * so the header ends at the subtitle.
+ */
+@Composable
+private fun LocalPlaylistDetailHeader(
+    playlist: LocalPlaylist,
+    coverArtworks: List<String>,
+    onBack: () -> Unit,
+) {
+    GradientHeader(coverArtworks.firstOrNull(), onBack) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(OmegaSpacing.lg),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            PlaylistCoverArt(coverArtworks)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                playlist.name,
+                // Same emphasized slot as remote Detail headers:
+                // 24sp headlineSmall with emphasis by weight/family,
+                // so the title never reflows at font scale 1.33/2.0.
+                style = MaterialTheme.typography.headlineSmallEmphasized,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                if (playlist.songCount > 0) {
+                    "Playlist · ${songCountLabel(playlist.songCount)}"
+                } else {
+                    "Playlist"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/**
+ * The local playlist cover: the first song's artwork when the
+ * playlist has a single distinct artwork; a 2x2 mosaic of up to
+ * four distinct artworks otherwise (cycling the available ones
+ * when only two or three exist, so the frame is never part-empty);
+ * the shared [Artwork] placeholder (note glyph on surfaceVariant)
+ * when the playlist is empty or no song carries artwork. Tiles are
+ * the shared [Artwork] at 90dp with square corners — the mosaic
+ * frame supplies the 28dp silhouette — so image loading, cropping,
+ * and the missing-art state stay the design system's, not a local
+ * re-implementation.
+ */
+@Composable
+private fun PlaylistCoverArt(coverArtworks: List<String>) {
+    when (coverArtworks.size) {
+        0 -> Artwork(null, 180, HeaderArtworkCorner)
+        1 -> Artwork(coverArtworks[0], 180, HeaderArtworkCorner)
+        else ->
+            Box(
+                Modifier
+                    .size(180.dp)
+                    .clip(RoundedCornerShape(HeaderArtworkCorner))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Column {
+                    Row {
+                        MosaicTile(coverArtworks[0])
+                        MosaicTile(coverArtworks[1])
+                    }
+                    Row {
+                        MosaicTile(coverArtworks[2 % coverArtworks.size])
+                        MosaicTile(coverArtworks[3 % coverArtworks.size])
+                    }
+                }
+            }
+    }
+}
+
+@Composable
+private fun MosaicTile(url: String) {
+    Artwork(url, 90, 0.dp)
 }
