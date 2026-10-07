@@ -5,9 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import com.manishraj.saavnmusic.data.repository.MusicRepository
+import com.manishraj.saavnmusic.data.repository.RemovedPlaylistSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.download.DownloadWorker
+import com.manishraj.saavnmusic.playback.InsertNextResult
+import com.manishraj.saavnmusic.playback.PlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +28,7 @@ class LibraryViewModel
     @Inject
     constructor(
         private val repo: MusicRepository,
+        private val player: PlayerController,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         val favorites = repo.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -90,6 +94,35 @@ class LibraryViewModel
                 val quality = repo.settings.first().downloadQuality
                 DownloadWorker.enqueue(WorkManager.getInstance(context), song, quality)
             }
+        }
+
+        /**
+         * Row-menu Play next (menu parity, spec §3): the shared
+         * [PlayerController]'s engine op. Synchronous — the caller
+         * picks the snackbar copy from the result (inserted after
+         * the current track vs appended to an idle queue).
+         */
+        fun playNext(song: Song): InsertNextResult = player.insertNext(song)
+
+        /**
+         * Removes [song] from local playlist [playlistId] (the
+         * LocalPlaylistDetail row menu). [onRemoved] receives the
+         * removed membership so the caller can offer Undo;
+         * [restoreToPlaylist] puts it back at its original position.
+         */
+        fun removeFromPlaylist(
+            playlistId: Long,
+            song: Song,
+            onRemoved: (RemovedPlaylistSong) -> Unit,
+        ) {
+            viewModelScope.launch {
+                repo.removeFromPlaylist(playlistId, song)?.let(onRemoved)
+            }
+        }
+
+        /** Undo for [removeFromPlaylist] — exact-position restore. */
+        fun restoreToPlaylist(removed: RemovedPlaylistSong) {
+            viewModelScope.launch { repo.restoreToPlaylist(removed) }
         }
 
         fun playlistSongs(id: Long): Flow<List<Song>> = repo.playlistSongs(id)
