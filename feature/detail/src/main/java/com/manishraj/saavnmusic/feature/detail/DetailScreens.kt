@@ -1,7 +1,7 @@
 package com.manishraj.saavnmusic.feature.detail
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
@@ -274,11 +274,14 @@ fun SongListHeader(
 private fun HeaderDescription(text: String) {
     var expanded by remember(text) { mutableStateOf(false) }
     var overflows by remember(text) { mutableStateOf(false) }
-    val sizeSpec: AnimationSpec<IntSize> =
+    val sizeSpec: FiniteAnimationSpec<IntSize> =
         if (LocalReducedMotion.current) {
             snap()
         } else {
-            MaterialTheme.motionScheme.defaultSpatialSpec()
+            // The scheme's spatial specs are springs (finite) by
+            // construction; animateContentSize just declares the
+            // narrower parameter type. snap() is the never-taken floor.
+            MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>() as? FiniteAnimationSpec<IntSize> ?: snap()
         }
     Text(
         text,
