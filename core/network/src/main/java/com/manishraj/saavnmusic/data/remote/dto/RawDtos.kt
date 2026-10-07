@@ -3,11 +3,13 @@ package com.manishraj.saavnmusic.data.remote.dto
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -39,6 +41,35 @@ object FlexibleIntSerializer : KSerializer<Int> {
         val element = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return 0
         val primitive = element as? JsonPrimitive ?: return 0
         return primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull() ?: 0
+    }
+}
+
+/**
+ * Song-list fields (`list`, `topSongs`, `singles`) are shape-unstable
+ * upstream: search/browse payloads return `"list": ""` (an empty
+ * STRING) where detail payloads return a real array — decoding a
+ * string as List<RawSongDto> throws and once took down ALL of Search
+ * (an album result killed the combined load; found by on-device QA,
+ * 2026-10-07 — the same bug class Winmega hit in browse modules).
+ * Anything that is not a JSON array decodes as an empty list.
+ */
+object FlexibleSongListSerializer : KSerializer<List<RawSongDto>> {
+    private val delegate = ListSerializer(RawSongDto.serializer())
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun serialize(
+        encoder: Encoder,
+        value: List<RawSongDto>,
+    ) {
+        encoder.encodeSerializableValue(delegate, value)
+    }
+
+    override fun deserialize(decoder: Decoder): List<RawSongDto> {
+        val jsonDecoder = decoder as? JsonDecoder ?: return emptyList()
+        val element = jsonDecoder.decodeJsonElement()
+        if (element !is JsonArray) return emptyList()
+        return jsonDecoder.json.decodeFromJsonElement(delegate, element)
     }
 }
 
@@ -124,7 +155,7 @@ data class RawAlbumDto(
     @SerialName("play_count") val playCount: String? = null,
     @SerialName("explicit_content") val explicitContent: String? = null,
     @SerialName("list_count") val listCount: String? = null,
-    val list: List<RawSongDto> = emptyList(),
+    @Serializable(with = FlexibleSongListSerializer::class) val list: List<RawSongDto> = emptyList(),
     @SerialName("more_info") val moreInfo: RawAlbumMoreInfoDto? = null,
 )
 
@@ -153,7 +184,7 @@ data class RawPlaylistDto(
     @SerialName("play_count") val playCount: String? = null,
     @SerialName("explicit_content") val explicitContent: String? = null,
     @SerialName("list_count") val listCount: String? = null,
-    val list: List<RawSongDto> = emptyList(),
+    @Serializable(with = FlexibleSongListSerializer::class) val list: List<RawSongDto> = emptyList(),
     @SerialName("more_info") val moreInfo: RawPlaylistMoreInfoDto? = null,
 )
 
@@ -179,9 +210,9 @@ data class RawArtistPageDto(
     val dominantType: String? = null,
     val bio: String? = null,
     val dob: String? = null,
-    val topSongs: List<RawSongDto> = emptyList(),
+    @Serializable(with = FlexibleSongListSerializer::class) val topSongs: List<RawSongDto> = emptyList(),
     val topAlbums: List<RawAlbumDto> = emptyList(),
-    val singles: List<RawSongDto> = emptyList(),
+    @Serializable(with = FlexibleSongListSerializer::class) val singles: List<RawSongDto> = emptyList(),
     val similarArtists: List<RawSimilarArtistDto> = emptyList(),
 )
 

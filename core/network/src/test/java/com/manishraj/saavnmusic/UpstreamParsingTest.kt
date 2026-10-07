@@ -6,6 +6,7 @@ import com.manishraj.saavnmusic.data.remote.dto.RawBrowseModulesDto
 import com.manishraj.saavnmusic.data.remote.dto.RawGlobalSearchDto
 import com.manishraj.saavnmusic.data.remote.dto.RawLyricsDto
 import com.manishraj.saavnmusic.data.remote.dto.RawPagedDto
+import com.manishraj.saavnmusic.data.remote.dto.RawPlaylistDto
 import com.manishraj.saavnmusic.data.remote.dto.RawSongDto
 import com.manishraj.saavnmusic.data.remote.dto.RawStationEntryDto
 import com.manishraj.saavnmusic.data.remote.toDomain
@@ -207,5 +208,35 @@ class UpstreamParsingTest {
                 .downloadUrls
                 .isNotEmpty(),
         )
+    }
+
+    // Regression (on-device QA, 2026-10-07): search.getAlbumResults
+    // returns "list": "" (empty string) on album items; decoding that
+    // as List<RawSongDto> threw and took down the whole Search screen.
+    @Test
+    fun albumSearchResultWithStringListDecodes() {
+        val fixture =
+            """
+            {"total":2,"start":0,"results":[
+              {"id":"al1","title":"Album One","type":"album","list_count":"0","list":""},
+              {"id":"al2","title":"Album Two","type":"album","list_count":"1",
+               "list":[{"id":"s1","title":"Song One","type":"song"}]}
+            ]}
+            """.trimIndent()
+        val page = json.decodeFromString<RawPagedDto<RawAlbumDto>>(fixture)
+        assertEquals(2, page.results.size)
+        assertTrue(page.results[0].list.isEmpty())
+        assertEquals(listOf("Song One"), page.results[1].list.map { it.title })
+    }
+
+    @Test
+    fun playlistWithStringListDecodes() {
+        val fixture =
+            """
+            {"id":"pl1","title":"Playlist One","type":"playlist","list_count":"37","list":""}
+            """.trimIndent()
+        val playlist = json.decodeFromString<RawPlaylistDto>(fixture)
+        assertEquals("Playlist One", playlist.title)
+        assertTrue(playlist.list.isEmpty())
     }
 }
