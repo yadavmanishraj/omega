@@ -1,7 +1,9 @@
 package com.manishraj.saavnmusic.feature.library
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
@@ -23,19 +26,19 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,12 +50,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.data.repository.toSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
@@ -60,11 +64,12 @@ import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
+import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
+import com.manishraj.saavnmusic.ui.components.OmegaSegmentedListItem
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
-import kotlinx.coroutines.launch
 
 /** Library tab indices, in tab-bar order. Navigation deep-links use these. */
 const val LIBRARY_TAB_FAVORITES = 0
@@ -79,6 +84,15 @@ private fun formatBytes(bytes: Long): String =
         else -> String.format("%.0f MB", bytes / (1024.0 * 1024))
     }
 
+/** User-facing download status (spec §7: COMPLETED reads "Downloaded"; the stored enum is unchanged). */
+private fun downloadStatusLabel(status: String): String =
+    when (status) {
+        "COMPLETED" -> "Downloaded"
+        "DOWNLOADING" -> "Downloading"
+        "FAILED" -> "Failed"
+        else -> status
+    }
+
 private fun <T> sorted(
     list: List<T>,
     mode: SortMode,
@@ -91,12 +105,41 @@ private fun <T> sorted(
     }
 
 /**
- * Library (REDESIGN_SPEC §6): all-local content. Single-line tab labels
- * with counts, a labeled sort chip + menu (no "Toggle"), downloads with
- * progress/retry/summary and confirm-then-delete with Undo, favorites
- * with Undo, history cleared from the title-row overflow with
- * confirmation, and playlists behind a FAB + validated create dialog.
+ * One filled segment of a Library list (M3 Expressive spec §3/§5):
+ * the same surfaceContainerHigh + large-shape treatment as
+ * [OmegaSegmentedListItem], wrapping rows whose content is richer
+ * than the item's headline/supporting strings — [SongRow] (its
+ * protected duration slot is a Phase B guarantee) and the Downloads
+ * row (progress / error affordances). Lists separate segments by
+ * the kit's 2dp gap; grouping is carried by containment, not
+ * dividers.
  */
+@Composable
+private fun SegmentedSegment(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier,
+        content = content,
+    )
+}
+
+/**
+ * Library (REDESIGN_SPEC §6 + M3 Expressive spec §5): all-local
+ * content. Single-line tab labels with counts, a labeled sort chip +
+ * menu (no "Toggle"), Favorites/Downloads/History as segmented lists
+ * with animateItem, downloads with wavy-then-determinate progress /
+ * retry / one-line summary and confirm-then-delete with Undo,
+ * favorites with Undo, history cleared from the title-row overflow
+ * with confirmation, playlist delete behind a confirm dialog, and
+ * playlists created from a single medium FAB. All snackbar feedback
+ * goes through the shell's [LocalOmegaSnackbar] host (above the
+ * mini-player).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     vm: LibraryViewModel = hiltViewModel(),
@@ -124,34 +167,23 @@ fun LibraryScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var confirmClearHistory by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DownloadInfo?>(null) }
+    var pendingDeletePlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var openPlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val snackbar = LocalOmegaSnackbar.current
     val confirmAdded: (String) -> Unit = { playlistName ->
-        scope.launch {
-            snackbar.showSnackbar(
-                "Added to $playlistName",
-                duration = SnackbarDuration.Short,
-            )
-        }
+        snackbar?.showMessage("Added to $playlistName")
     }
     // One unfavorite path for the Favorites tab: the heart button
     // AND the row menu's "Remove from favorites" both go through
     // here, so both get the Undo snackbar.
     val unfavoriteWithUndo: (Song) -> Unit = { song ->
         vm.unfavorite(song)
-        scope.launch {
-            val result =
-                snackbar.showSnackbar(
-                    "Removed from favorites",
-                    actionLabel = "Undo",
-                    duration = SnackbarDuration.Short,
-                )
-            if (result == SnackbarResult.ActionPerformed) {
-                vm.restoreFavorite(song)
-            }
-        }
+        snackbar?.showMessage(
+            "Removed from Favorites",
+            actionLabel = "Undo",
+            onAction = { vm.restoreFavorite(song) },
+        )
     }
 
     val playlist = openPlaylist
@@ -168,12 +200,16 @@ fun LibraryScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             if (tab == LIBRARY_TAB_PLAYLISTS) {
-                FloatingActionButton(onClick = { showCreate = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = "New playlist")
-                }
+                // The single playlist-creation affordance (spec §5):
+                // a medium extended FAB, icon + text, docked by the
+                // Scaffold above the shell's mini-player.
+                ExtendedFloatingActionButton(
+                    onClick = { showCreate = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("New playlist") },
+                )
             }
         },
     ) { padding ->
@@ -246,23 +282,30 @@ fun LibraryScreen(
                             )
                         },
                     )
+                    // Sort stays a menu, not a connected group (spec
+                    // §5): at font 1.33 the tab header is crowded and
+                    // sort is a tertiary action. The active order is
+                    // check-marked so state reads beyond the chip.
                     DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Newest first", maxLines = 1, softWrap = false) },
+                        SortMenuItem(
+                            label = "Newest first",
+                            selected = sortMode == SortMode.NEWEST,
                             onClick = {
                                 vm.sortMode.value = SortMode.NEWEST
                                 showSortMenu = false
                             },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Oldest first", maxLines = 1, softWrap = false) },
+                        SortMenuItem(
+                            label = "Oldest first",
+                            selected = sortMode == SortMode.OLDEST,
                             onClick = {
                                 vm.sortMode.value = SortMode.OLDEST
                                 showSortMenu = false
                             },
                         )
-                        DropdownMenuItem(
-                            text = { Text("A–Z", maxLines = 1, softWrap = false) },
+                        SortMenuItem(
+                            label = "A–Z",
+                            selected = sortMode == SortMode.A_Z,
                             onClick = {
                                 vm.sortMode.value = SortMode.A_Z
                                 showSortMenu = false
@@ -281,30 +324,36 @@ fun LibraryScreen(
                         )
                     } else {
                         val ordered = sorted(favs, sortMode) { it.name }
-                        LazyColumn {
-                            items(ordered) { song ->
-                                SongRow(
-                                    song,
-                                    { onPlayQueue(ordered, ordered.indexOf(song)) },
-                                    trailing = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            SongOverflowMenuButton(
-                                                song = song,
-                                                isFavorite = true,
-                                                onDownload = { vm.download(song) },
-                                                onToggleFavorite = { unfavoriteWithUndo(song) },
-                                                onAddToPlaylist = { playlistTarget = song },
-                                            )
-                                            IconButton(onClick = { unfavoriteWithUndo(song) }) {
-                                                Icon(
-                                                    Icons.Filled.Favorite,
-                                                    contentDescription = "Remove ${song.name} from favorites",
-                                                    tint = MaterialTheme.colorScheme.primary,
+                        LazyColumn(
+                            contentPadding =
+                                PaddingValues(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            items(ordered, key = { it.id }) { song ->
+                                SegmentedSegment(Modifier.animateItem()) {
+                                    SongRow(
+                                        song,
+                                        { onPlayQueue(ordered, ordered.indexOf(song)) },
+                                        trailing = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                SongOverflowMenuButton(
+                                                    song = song,
+                                                    isFavorite = true,
+                                                    onDownload = { vm.download(song) },
+                                                    onToggleFavorite = { unfavoriteWithUndo(song) },
+                                                    onAddToPlaylist = { playlistTarget = song },
                                                 )
+                                                IconButton(onClick = { unfavoriteWithUndo(song) }) {
+                                                    Icon(
+                                                        Icons.Filled.Favorite,
+                                                        contentDescription = "Remove ${song.name} from favorites",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                }
                                             }
-                                        }
-                                    },
-                                )
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -326,79 +375,103 @@ fun LibraryScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.xs),
                             )
-                            LazyColumn {
-                                items(ordered) { d ->
-                                    ListItem(
-                                        modifier =
-                                            if (d.status == "COMPLETED") {
-                                                Modifier.clickable {
-                                                    // Play the downloaded files as a queue
-                                                    // starting at the tapped track — the
-                                                    // local files play fully offline.
-                                                    val playable = ordered.filter { it.status == "COMPLETED" }
-                                                    onPlayQueue(
-                                                        playable.map { it.toSong() },
-                                                        playable.indexOf(d),
-                                                    )
-                                                }
-                                            } else {
-                                                Modifier
-                                            },
-                                        headlineContent = {
-                                            Text(d.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
-                                        },
-                                        supportingContent = {
-                                            Column {
-                                                Text(
-                                                    listOf(d.artist, d.quality, formatBytes(d.sizeBytes), d.status)
-                                                        .filter { it.isNotBlank() }
-                                                        .joinToString(" • "),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                )
-                                                if (d.status == "FAILED") {
-                                                    val errorMessage = d.errorMessage
-                                                    if (!errorMessage.isNullOrBlank()) {
-                                                        Text(
-                                                            errorMessage,
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.error,
+                            LazyColumn(
+                                contentPadding =
+                                    PaddingValues(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                items(ordered, key = { it.songId }) { d ->
+                                    SegmentedSegment(Modifier.animateItem()) {
+                                        ListItem(
+                                            modifier =
+                                                if (d.status == "COMPLETED") {
+                                                    Modifier.clickable {
+                                                        // Play the downloaded files as a queue
+                                                        // starting at the tapped track — the
+                                                        // local files play fully offline.
+                                                        val playable = ordered.filter { it.status == "COMPLETED" }
+                                                        onPlayQueue(
+                                                            playable.map { it.toSong() },
+                                                            playable.indexOf(d),
                                                         )
                                                     }
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Icon(
-                                                            Icons.Outlined.ErrorOutline,
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.error,
-                                                        )
-                                                        TextButton(onClick = { vm.retryDownload(d) }) {
-                                                            Text("Retry")
+                                                } else {
+                                                    Modifier
+                                                },
+                                            headlineContent = {
+                                                Text(d.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
+                                            },
+                                            supportingContent = {
+                                                Column {
+                                                    // ONE protected line (Phase B): quality +
+                                                    // size + status never wrap or truncate
+                                                    // into a second line.
+                                                    Text(
+                                                        listOf(
+                                                            d.artist,
+                                                            d.quality,
+                                                            formatBytes(d.sizeBytes),
+                                                            downloadStatusLabel(d.status),
+                                                        ).filter { it.isNotBlank() }
+                                                            .joinToString(" • "),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                    )
+                                                    if (d.status == "FAILED") {
+                                                        val errorMessage = d.errorMessage
+                                                        if (!errorMessage.isNullOrBlank()) {
+                                                            Text(
+                                                                errorMessage,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.error,
+                                                            )
+                                                        }
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(
+                                                                Icons.Outlined.ErrorOutline,
+                                                                contentDescription = null,
+                                                                tint = MaterialTheme.colorScheme.error,
+                                                            )
+                                                            TextButton(onClick = { vm.retryDownload(d) }) {
+                                                                Text("Retry")
+                                                            }
+                                                        }
+                                                    } else if (d.status != "COMPLETED") {
+                                                        Spacer(Modifier.height(OmegaSpacing.xs))
+                                                        if (d.progress > 0) {
+                                                            // Bytes are flowing: determinate.
+                                                            LinearProgressIndicator(
+                                                                progress = { d.progress / 100f },
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                            )
+                                                            Text(
+                                                                "${d.progress}%",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                            )
+                                                        } else {
+                                                            // Indeterminate phase (queued /
+                                                            // connecting): the wavy indicator.
+                                                            LinearWavyProgressIndicator(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                            )
                                                         }
                                                     }
-                                                } else if (d.status != "COMPLETED") {
-                                                    Spacer(Modifier.height(OmegaSpacing.xs))
-                                                    LinearProgressIndicator(
-                                                        progress = { d.progress / 100f },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                    )
-                                                    Text(
-                                                        "${d.progress}%",
-                                                        style = MaterialTheme.typography.bodySmall,
+                                                }
+                                            },
+                                            leadingContent = { Artwork(d.imageUrl, contentDescription = d.name) },
+                                            trailingContent = {
+                                                IconButton(onClick = { pendingDelete = d }) {
+                                                    Icon(
+                                                        Icons.Filled.Delete,
+                                                        contentDescription = "Delete download ${d.name}",
                                                     )
                                                 }
-                                            }
-                                        },
-                                        leadingContent = { Artwork(d.imageUrl, contentDescription = d.name) },
-                                        trailingContent = {
-                                            IconButton(onClick = { pendingDelete = d }) {
-                                                Icon(
-                                                    Icons.Filled.Delete,
-                                                    contentDescription = "Delete download ${d.name}",
-                                                )
-                                            }
-                                        },
-                                    )
+                                            },
+                                            colors =
+                                                ListItemDefaults.colors(containerColor = Color.Transparent),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -412,22 +485,32 @@ fun LibraryScreen(
                         )
                     } else {
                         val ordered = sorted(hist, sortMode) { it.name }
-                        LazyColumn {
-                            items(ordered) { song ->
-                                val songIsFavorite = favs.any { it.id == song.id }
-                                SongRow(
-                                    song,
-                                    { onPlayQueue(ordered, ordered.indexOf(song)) },
-                                    trailing = {
-                                        SongOverflowMenuButton(
-                                            song = song,
-                                            isFavorite = songIsFavorite,
-                                            onDownload = { vm.download(song) },
-                                            onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
-                                            onAddToPlaylist = { playlistTarget = song },
-                                        )
-                                    },
-                                )
+                        LazyColumn(
+                            contentPadding =
+                                PaddingValues(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            items(ordered, key = { it.id }) { song ->
+                                SegmentedSegment(Modifier.animateItem()) {
+                                    SongRow(
+                                        song,
+                                        { onPlayQueue(ordered, ordered.indexOf(song)) },
+                                        trailing = {
+                                            SongOverflowMenuButton(
+                                                song = song,
+                                                isFavorite = favs.any { it.id == song.id },
+                                                onDownload = { vm.download(song) },
+                                                onToggleFavorite = {
+                                                    vm.toggleFavorite(
+                                                        song,
+                                                        favs.any { it.id == song.id },
+                                                    )
+                                                },
+                                                onAddToPlaylist = { playlistTarget = song },
+                                            )
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -437,28 +520,34 @@ fun LibraryScreen(
                         EmptyState(
                             "No playlists yet",
                             "Make one for a mood, a trip, anything.",
-                            actionLabel = "New playlist",
-                            onAction = { showCreate = true },
                         )
                     } else {
-                        LazyColumn {
-                            items(pls) { p ->
-                                ListItem(
-                                    headlineContent = {
-                                        Text(p.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
-                                    },
-                                    supportingContent = {
-                                        Text("${p.songCount} songs", style = MaterialTheme.typography.bodyMedium)
-                                    },
-                                    trailingContent = {
-                                        IconButton(onClick = { vm.deletePlaylist(p.id) }) {
+                        LazyColumn(
+                            // Bottom padding clears the FAB so it never
+                            // covers the last playlist row.
+                            contentPadding =
+                                PaddingValues(
+                                    start = OmegaSpacing.lg,
+                                    end = OmegaSpacing.lg,
+                                    top = OmegaSpacing.sm,
+                                    bottom = 96.dp,
+                                ),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            items(pls, key = { it.id }) { p ->
+                                OmegaSegmentedListItem(
+                                    headline = p.name,
+                                    supporting = "${p.songCount} songs",
+                                    trailing = {
+                                        IconButton(onClick = { pendingDeletePlaylist = p }) {
                                             Icon(
                                                 Icons.Filled.Delete,
                                                 contentDescription = "Delete playlist ${p.name}",
                                             )
                                         }
                                     },
-                                    modifier = Modifier.clickable { openPlaylist = p },
+                                    onClick = { openPlaylist = p },
+                                    modifier = Modifier.animateItem(),
                                 )
                             }
                         }
@@ -510,21 +599,40 @@ fun LibraryScreen(
                 TextButton(onClick = {
                     pendingDelete = null
                     vm.deleteDownload(d)
-                    scope.launch {
-                        val result =
-                            snackbar.showSnackbar(
-                                "Download deleted",
-                                actionLabel = "Undo",
-                                duration = SnackbarDuration.Short,
-                            )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            vm.retryDownload(d)
-                        }
-                    }
+                    snackbar?.showMessage(
+                        "Download deleted",
+                        actionLabel = "Undo",
+                        onAction = { vm.retryDownload(d) },
+                    )
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // Playlist delete is destructive and NOT undoable (the VM has no
+    // restore path for a playlist + its membership), so per spec §7 it
+    // is confirm-first with an error-colored action, then a
+    // message-only snackbar — no fake Undo.
+    pendingDeletePlaylist?.let { p ->
+        AlertDialog(
+            onDismissRequest = { pendingDeletePlaylist = null },
+            title = { Text("Delete playlist?") },
+            text = {
+                Text("“${p.name}” will be removed from this device. The songs stay in your library. This can't be undone.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDeletePlaylist = null
+                    if (openPlaylist?.id == p.id) openPlaylist = null
+                    vm.deletePlaylist(p.id)
+                    snackbar?.showMessage("Playlist deleted")
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeletePlaylist = null }) { Text("Cancel") }
             },
         )
     }
@@ -537,25 +645,25 @@ fun LibraryScreen(
             onDismissRequest = { showCreate = false },
             title = { Text("New playlist") },
             text = {
-                Column {
-                    Text("Playlist name", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(OmegaSpacing.xs))
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = {
-                            name = it
-                            interacted = true
-                        },
-                        label = { Text("Playlist name") },
-                        singleLine = true,
-                        isError = interacted && blank,
-                        supportingText = {
-                            if (interacted && blank) {
-                                Text("Give your playlist a name first.", color = MaterialTheme.colorScheme.error)
-                            }
-                        },
-                    )
-                }
+                // Label names the field; the placeholder is an EXAMPLE
+                // (spec §7) — the same copy the picker dialog uses.
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        interacted = true
+                    },
+                    label = { Text("Playlist name") },
+                    placeholder = { Text("e.g. Monsoon drive") },
+                    singleLine = true,
+                    isError = interacted && blank,
+                    supportingText = {
+                        if (interacted && blank) {
+                            Text("Give your playlist a name first.", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             },
             confirmButton = {
                 Button(
@@ -571,6 +679,25 @@ fun LibraryScreen(
             },
         )
     }
+}
+
+/** One sort option; the active order carries a check so state reads beyond color. */
+@Composable
+private fun SortMenuItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(label, maxLines = 1, softWrap = false) },
+        leadingIcon =
+            if (selected) {
+                { Icon(Icons.Filled.Check, contentDescription = null) }
+            } else {
+                null
+            },
+        onClick = onClick,
+    )
 }
 
 /** Library tabs with count badges; scrollable before labels can compress. */
@@ -631,22 +758,28 @@ private fun LocalPlaylistDetail(
                 "Use a song's ⋮ menu anywhere in the app to add it to a playlist.",
             )
         } else {
-            LazyColumn {
-                items(songs) { song ->
+            LazyColumn(
+                contentPadding =
+                    PaddingValues(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                items(songs, key = { it.id }) { song ->
                     val songIsFavorite = favs.any { it.id == song.id }
-                    SongRow(
-                        song,
-                        { onPlayQueue(songs, songs.indexOf(song)) },
-                        trailing = {
-                            SongOverflowMenuButton(
-                                song = song,
-                                isFavorite = songIsFavorite,
-                                onDownload = { vm.download(song) },
-                                onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
-                                onAddToPlaylist = { playlistTarget = song },
-                            )
-                        },
-                    )
+                    SegmentedSegment(Modifier.animateItem()) {
+                        SongRow(
+                            song,
+                            { onPlayQueue(songs, songs.indexOf(song)) },
+                            trailing = {
+                                SongOverflowMenuButton(
+                                    song = song,
+                                    isFavorite = songIsFavorite,
+                                    onDownload = { vm.download(song) },
+                                    onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                    onAddToPlaylist = { playlistTarget = song },
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }
