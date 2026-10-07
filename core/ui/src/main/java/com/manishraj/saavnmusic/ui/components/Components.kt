@@ -129,14 +129,6 @@ fun SongRow(
     trailing: @Composable (() -> Unit)? = null,
 ) {
     ListItem(
-        headlineContent = {
-            Text(
-                song.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleMedium,
-            )
-        },
         supportingContent = {
             // The duration gets a protected slot: as one joined
             // string it was ellipsized away (or cut mid-value,
@@ -164,7 +156,14 @@ fun SongRow(
         leadingContent = { Artwork(song.imageUrl, contentDescription = song.name) },
         trailingContent = trailing,
         modifier = Modifier.clickable { onClick() },
-    )
+    ) {
+        Text(
+            song.name,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
 }
 
 /** Artwork-led card for rails and grids (148dp per spec §3.4). */
