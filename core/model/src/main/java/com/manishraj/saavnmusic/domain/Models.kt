@@ -42,6 +42,11 @@ data class Artist(
     val bio: String? = null,
     val topSongs: List<Song> = emptyList(),
     val topAlbums: List<Album> = emptyList(),
+    /** Standalone singles from the artist page — parsed upstream for
+     * as long as the DTO has existed but dropped in mapping until the
+     * A17 audit (F-14); a singles-heavy artist's page silently omitted
+     * a whole catalogue slice. */
+    val singles: List<Song> = emptyList(),
 )
 
 /** Home feed sections, assembled from the upstream browse-modules payload (already classified by shape). */
@@ -52,9 +57,46 @@ data class HomeContent(
     val artists: List<Artist> = emptyList(),
 )
 
+/**
+ * One entry of the global search's "top results" (upstream
+ * `topquery`): the best matches for the query, of MIXED entity type.
+ * Each upstream item carries a `type` — until the A17 audit (F-02)
+ * every item was force-mapped to a [Song], so an artist top hit
+ * rendered as a song row whose tap tried to resolve the ARTIST id as
+ * a song and silently died. The variants keep the entity (and its
+ * real id) intact so the UI can navigate like the tabs do.
+ */
+sealed interface TopResult {
+    val id: String
+
+    data class SongResult(
+        val song: Song,
+    ) : TopResult {
+        override val id: String get() = song.id
+    }
+
+    data class AlbumResult(
+        val album: Album,
+    ) : TopResult {
+        override val id: String get() = album.id
+    }
+
+    data class ArtistResult(
+        val artist: Artist,
+    ) : TopResult {
+        override val id: String get() = artist.id
+    }
+
+    data class PlaylistResult(
+        val playlist: Playlist,
+    ) : TopResult {
+        override val id: String get() = playlist.id
+    }
+}
+
 /** Global search (autocomplete) results: lightweight items; songs here are NOT playable until resolved by id. */
 data class GlobalSearch(
-    val topSongs: List<Song> = emptyList(),
+    val topResults: List<TopResult> = emptyList(),
     val songs: List<Song> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),

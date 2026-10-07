@@ -1,14 +1,17 @@
 package com.manishraj.saavnmusic.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
@@ -33,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.manishraj.saavnmusic.domain.LocalPlaylist
@@ -149,7 +153,9 @@ fun SongOverflowMenuButton(
  * [onPick] receives an existing playlist, [onCreatePlaylist] receives
  * the validated new name (the host creates the playlist and adds the
  * song to it). When the user has no playlists yet, the dialog opens
- * straight on the create form.
+ * straight on the create form; when a list exists, create mode is a
+ * reversible detour (title-row back arrow + system Back, F-11), not a
+ * one-way door.
  */
 @Composable
 fun PlaylistPickerDialog(
@@ -161,9 +167,28 @@ fun PlaylistPickerDialog(
     var creating by remember { mutableStateOf(playlists.isEmpty()) }
     var name by remember { mutableStateOf("") }
     var nameInteracted by remember { mutableStateOf(false) }
+    // Create mode is NOT a one-way door (F-11): when a list exists
+    // behind the form, system Back returns to it instead of throwing
+    // the half-typed name away with the whole dialog (the title-row
+    // back arrow below is the same path, visible).
+    BackHandler(enabled = creating && playlists.isNotEmpty()) { creating = false }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add to playlist") },
+        title = {
+            if (creating && playlists.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { creating = false }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back to playlists",
+                        )
+                    }
+                    Text("New playlist")
+                }
+            } else {
+                Text(if (creating) "New playlist" else "Add to playlist")
+            }
+        },
         text = {
             if (creating) {
                 NewPlaylistForm(
@@ -182,8 +207,18 @@ fun PlaylistPickerDialog(
                 )
             } else {
                 Column {
-                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                        items(playlists) { playlist ->
+                    // A plain column, not a LazyColumn (F-26): the
+                    // lazy list measured tall inside the dialog and
+                    // left a band of dead space between the last
+                    // playlist and Cancel. The column hugs its
+                    // content exactly, capped + scrollable when the
+                    // library of playlists outgrows the cap.
+                    Column(
+                        Modifier
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        playlists.forEach { playlist ->
                             ListItem(
                                 supportingContent = {
                                     Text(

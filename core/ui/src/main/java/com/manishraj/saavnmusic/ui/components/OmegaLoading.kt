@@ -15,8 +15,9 @@ import androidx.compose.ui.semantics.semantics
  * morphing [LoadingIndicator], wrapped so the alpha API lives in
  * exactly one place. Use for SHORT, undifferentiated waits (search
  * submit, lyrics fetch, queue resolution) — content-shaped loads keep
- * using the skeletons ([ShimmerList] / [ShimmerGrid]), which remain
- * the primary loading pattern.
+ * using the skeleton ([ShimmerList]), which remains the primary
+ * loading pattern. (The grid skeleton ShimmerGrid was removed in the
+ * A17 fix wave, F-28: defined, documented, and never called.)
  *
  * The indicator is pure motion, so per spec §8 it announces itself:
  * a polite live region with a content description gives TalkBack

@@ -290,10 +290,40 @@ data class RawGlobalPlaylistItemDto(
     @SerialName("more_info") val moreInfo: RawGlobalPlaylistMoreInfoDto? = null,
 )
 
+/**
+ * One `topquery` item: the section is MIXED-TYPE (the best match for
+ * the query may be a song, album, artist or playlist — each item
+ * carries its `type`), so it cannot be decoded as a song item the way
+ * the typed sections below are. This union shape captures the union
+ * of every variant's fields (the variants' `more_info` keys don't
+ * collide); the mapper dispatches on `type` (A17 audit F-02).
+ */
+@Serializable
+data class RawGlobalTopMoreInfoDto(
+    val album: String? = null,
+    @SerialName("primary_artists") val primaryArtists: String? = null,
+    val singers: String? = null,
+    val music: String? = null,
+    val year: String? = null,
+    val language: String? = null,
+)
+
+@Serializable
+data class RawGlobalTopItemDto(
+    val id: String? = null,
+    val title: String? = null,
+    val subtitle: String? = null,
+    val type: String? = null,
+    val image: String? = null,
+    @SerialName("perma_url") val permaUrl: String? = null,
+    val description: String? = null,
+    @SerialName("more_info") val moreInfo: RawGlobalTopMoreInfoDto? = null,
+)
+
 /** Note: upstream also returns `episodes` and `shows` sections; the app ignores them. */
 @Serializable
 data class RawGlobalSearchDto(
-    val topquery: RawSectionDto<RawGlobalSongItemDto>? = null,
+    val topquery: RawSectionDto<RawGlobalTopItemDto>? = null,
     val songs: RawSectionDto<RawGlobalSongItemDto>? = null,
     val albums: RawSectionDto<RawGlobalAlbumItemDto>? = null,
     val artists: RawSectionDto<RawGlobalArtistItemDto>? = null,

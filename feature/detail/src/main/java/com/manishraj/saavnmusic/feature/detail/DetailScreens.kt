@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,6 +54,7 @@ import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.components.compactCount
+import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.LocalReducedMotion
 
 /**
@@ -88,6 +92,7 @@ fun AlbumScreen(
             snackbar?.showMessage("Download queued")
         },
         onToggleFavorite = { song, isFav -> vm.toggleFavorite(song, isFav) },
+        onBack = onBack,
     ) { vm.loadAlbum(id) }
 }
 
@@ -106,7 +111,19 @@ fun PlaylistScreen(
     DetailList(
         s,
         { it.songs },
-        { p -> SongListHeader(p.name, "Playlist", p.imageUrl, p.description, onBack) },
+        { p ->
+            // The subtitle carries scope like every other header in
+            // the app (F-20): "Playlist · 45 songs", from the page's
+            // own count, falling back to the loaded list.
+            val count = p.songCount ?: p.songs.size
+            SongListHeader(
+                p.name,
+                if (count > 0) "Playlist · ${songCountLabel(count)}" else "Playlist",
+                p.imageUrl,
+                p.description,
+                onBack,
+            )
+        },
         onPlayQueue,
         favorites = favorites,
         onPlayNext = { song ->
@@ -118,6 +135,7 @@ fun PlaylistScreen(
             snackbar?.showMessage("Download queued")
         },
         onToggleFavorite = { song, isFav -> vm.toggleFavorite(song, isFav) },
+        onBack = onBack,
     ) { vm.loadPlaylist(id) }
 }
 
@@ -167,6 +185,23 @@ private fun rememberPlaylistPicker(vm: DetailViewModel): (Song) -> Unit {
     return { song -> target = song }
 }
 
+/**
+ * Back affordance for Detail's Loading / Error states (F-15): the
+ * success header carries its arrow inside the gradient, but these
+ * states render before any header exists — without this the user
+ * had NO visible exit during load or after a failure. Same icon,
+ * same "Back" description, same top-left placement as the header's.
+ */
+@Composable
+private fun DetailBackBar(onBack: () -> Unit) {
+    IconButton(onClick = onBack) {
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Back",
+        )
+    }
+}
+
 @Composable
 fun <T> DetailList(
     state: UiState<T>,
@@ -178,11 +213,20 @@ fun <T> DetailList(
     onAddToPlaylist: (Song) -> Unit,
     onDownload: (Song) -> Unit,
     onToggleFavorite: (Song, Boolean) -> Unit,
+    onBack: () -> Unit,
     retry: () -> Unit,
 ) {
     when (state) {
-        is UiState.Loading -> ShimmerList()
-        is UiState.Error -> ErrorState(state.message, retry)
+        is UiState.Loading ->
+            Column {
+                DetailBackBar(onBack)
+                ShimmerList()
+            }
+        is UiState.Error ->
+            Column {
+                DetailBackBar(onBack)
+                ErrorState(state.message, retry)
+            }
         is UiState.Success -> {
             val list = songs(state.data)
             LazyColumn {
@@ -217,11 +261,19 @@ fun <T> DetailList(
                                     .horizontalScroll(rememberScrollState()),
                         )
                     }
-                    items(list) { song ->
+                    // Stable keys (F-29): unkeyed items make
+                    // animateItem / item state positional, so a
+                    // list change animates the WRONG rows. Indexed
+                    // section-prefixed keys — bare song ids are NOT
+                    // unique within a list upstream.
+                    itemsIndexed(
+                        list,
+                        key = { index, song -> "song-$index-${song.id}" },
+                    ) { index, song ->
                         val isFavorite = favorites.any { it.id == song.id }
                         SongRow(
                             song,
-                            { play(list, list.indexOf(song)) },
+                            { play(list, index) },
                             trailing = {
                                 SongOverflowMenuButton(
                                     song = song,
@@ -312,7 +364,19 @@ private fun HeaderDescription(text: String) {
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
         onTextLayout = { overflows = it.hasVisualOverflow },
-        modifier = Modifier.animateContentSize(sizeSpec),
+        // Bounded to the header's padded content box (F-03): this
+        // was the one header text with NO width constraint of its
+        // own, and an unconstrained centered paragraph in the
+        // gradient column laid out over-wide — its first glyphs
+        // landed off the left screen edge ("ongs in Hindi.") while
+        // every sibling text (all width-bounded) rendered centered
+        // correctly. fillMaxWidth + the horizontal inset pin the
+        // paragraph to the same box as the title above it.
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .animateContentSize(sizeSpec),
     )
     if (overflows || expanded) {
         TextButton(
@@ -338,8 +402,16 @@ fun ArtistScreen(
     val snackbar = LocalOmegaSnackbar.current
     val requestAddToPlaylist = rememberPlaylistPicker(vm)
     when (val a = s) {
-        is UiState.Loading -> ShimmerList()
-        is UiState.Error -> ErrorState(a.message, onRetry = { vm.loadArtist(id) })
+        is UiState.Loading ->
+            Column {
+                DetailBackBar(onBack)
+                ShimmerList()
+            }
+        is UiState.Error ->
+            Column {
+                DetailBackBar(onBack)
+                ErrorState(a.message, onRetry = { vm.loadArtist(id) })
+            }
         is UiState.Success ->
             LazyColumn {
                 item {
@@ -351,31 +423,122 @@ fun ArtistScreen(
                         onBack,
                     )
                 }
-                item { SectionHeader("Top songs") }
-                items(a.data.topSongs) { song ->
-                    val isFavorite = favorites.any { it.id == song.id }
-                    SongRow(
-                        song,
-                        { onPlayQueue(a.data.topSongs, a.data.topSongs.indexOf(song)) },
-                        trailing = {
-                            SongOverflowMenuButton(
-                                song = song,
-                                isFavorite = isFavorite,
-                                onPlayNext = {
-                                    snackbar?.showMessage(playNextMessage(vm.playNext(song), song.name))
-                                },
-                                onDownload = {
-                                    vm.download(song)
-                                    snackbar?.showMessage("Download queued")
-                                },
-                                onToggleFavorite = { vm.toggleFavorite(song, isFavorite) },
-                                onAddToPlaylist = { requestAddToPlaylist(song) },
-                            )
-                        },
-                    )
+                // Sections render ONLY when they have content
+                // (F-14): the headers used to be unconditional, so
+                // an artist with no top songs showed a "Top songs"
+                // header over nothing. The artist page also gains
+                // the Play all / Shuffle cluster every other Detail
+                // surface has, and the SINGLES the mapper used to
+                // drop (see Artist.singles).
+                if (a.data.topSongs.isNotEmpty()) {
+                    item { SectionHeader("Top songs") }
+                    item {
+                        OmegaActionGroup(
+                            primaryLabel = "Play all",
+                            onPrimary = { onPlayQueue(a.data.topSongs, 0) },
+                            secondaryLabel = "Shuffle",
+                            onSecondary = { onPlayQueue(a.data.topSongs.shuffled(), 0) },
+                            primaryIcon = Icons.Filled.PlayArrow,
+                            secondaryIcon = Icons.Filled.Shuffle,
+                            modifier =
+                                Modifier
+                                    .padding(16.dp)
+                                    .horizontalScroll(rememberScrollState()),
+                        )
+                    }
+                    itemsIndexed(
+                        a.data.topSongs,
+                        key = { index, song -> "topsong-$index-${song.id}" },
+                    ) { index, song ->
+                        ArtistSongRow(
+                            song = song,
+                            queue = a.data.topSongs,
+                            index = index,
+                            favorites = favorites,
+                            onPlayQueue = onPlayQueue,
+                            onPlayNext = { s2 ->
+                                snackbar?.showMessage(playNextMessage(vm.playNext(s2), s2.name))
+                            },
+                            onDownload = { s2 ->
+                                vm.download(s2)
+                                snackbar?.showMessage("Download queued")
+                            },
+                            onToggleFavorite = { s2, isFav -> vm.toggleFavorite(s2, isFav) },
+                            onAddToPlaylist = requestAddToPlaylist,
+                        )
+                    }
                 }
-                item { SectionHeader("Top albums") }
-                item { LazyRow { items(a.data.topAlbums) { al -> MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) } } } }
+                if (a.data.singles.isNotEmpty()) {
+                    item { SectionHeader("Singles") }
+                    itemsIndexed(
+                        a.data.singles,
+                        key = { index, song -> "single-$index-${song.id}" },
+                    ) { index, song ->
+                        ArtistSongRow(
+                            song = song,
+                            queue = a.data.singles,
+                            index = index,
+                            favorites = favorites,
+                            onPlayQueue = onPlayQueue,
+                            onPlayNext = { s2 ->
+                                snackbar?.showMessage(playNextMessage(vm.playNext(s2), s2.name))
+                            },
+                            onDownload = { s2 ->
+                                vm.download(s2)
+                                snackbar?.showMessage("Download queued")
+                            },
+                            onToggleFavorite = { s2, isFav -> vm.toggleFavorite(s2, isFav) },
+                            onAddToPlaylist = requestAddToPlaylist,
+                        )
+                    }
+                }
+                if (a.data.topAlbums.isNotEmpty()) {
+                    item { SectionHeader("Top albums") }
+                    item {
+                        LazyRow {
+                            itemsIndexed(
+                                a.data.topAlbums,
+                                key = { index, al -> "album-$index-${al.id}" },
+                            ) { _, al ->
+                                MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) }
+                            }
+                        }
+                    }
+                }
             }
     }
+}
+
+/**
+ * One artist-page song row — top songs and singles share it: the
+ * same [SongRow] + full overflow menu the other Detail surfaces
+ * use, playing within the section's own list.
+ */
+@Composable
+private fun ArtistSongRow(
+    song: Song,
+    queue: List<Song>,
+    index: Int,
+    favorites: List<Song>,
+    onPlayQueue: (List<Song>, Int) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onDownload: (Song) -> Unit,
+    onToggleFavorite: (Song, Boolean) -> Unit,
+    onAddToPlaylist: (Song) -> Unit,
+) {
+    val isFavorite = favorites.any { it.id == song.id }
+    SongRow(
+        song,
+        { onPlayQueue(queue, index) },
+        trailing = {
+            SongOverflowMenuButton(
+                song = song,
+                isFavorite = isFavorite,
+                onPlayNext = { onPlayNext(song) },
+                onDownload = { onDownload(song) },
+                onToggleFavorite = { onToggleFavorite(song, isFavorite) },
+                onAddToPlaylist = { onAddToPlaylist(song) },
+            )
+        },
+    )
 }

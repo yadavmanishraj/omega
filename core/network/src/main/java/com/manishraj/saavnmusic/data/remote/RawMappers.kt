@@ -10,6 +10,7 @@ import com.manishraj.saavnmusic.data.remote.dto.RawGlobalArtistItemDto
 import com.manishraj.saavnmusic.data.remote.dto.RawGlobalPlaylistItemDto
 import com.manishraj.saavnmusic.data.remote.dto.RawGlobalSearchDto
 import com.manishraj.saavnmusic.data.remote.dto.RawGlobalSongItemDto
+import com.manishraj.saavnmusic.data.remote.dto.RawGlobalTopItemDto
 import com.manishraj.saavnmusic.data.remote.dto.RawLyricsDto
 import com.manishraj.saavnmusic.data.remote.dto.RawPlaylistDto
 import com.manishraj.saavnmusic.data.remote.dto.RawSongDto
@@ -19,6 +20,7 @@ import com.manishraj.saavnmusic.domain.GlobalSearch
 import com.manishraj.saavnmusic.domain.HomeContent
 import com.manishraj.saavnmusic.domain.Playlist
 import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.domain.TopResult
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -172,6 +174,8 @@ fun RawArtistPageDto.toDomain(json: Json): Artist =
         bio = parseBio(bio, json),
         topSongs = topSongs.map { it.toDomain() },
         topAlbums = topAlbums.map { it.toDomain() },
+        // Parsed by the DTO all along, dropped here until F-14.
+        singles = singles.map { it.toDomain() },
     )
 
 // ---- Global search items: lightweight, not playable ----
@@ -214,9 +218,68 @@ fun RawGlobalPlaylistItemDto.toDomain(): Playlist =
         description = description?.let { unescapeHtml(it) },
     )
 
+/**
+ * A `topquery` item mapped by its OWN entity type (A17 audit F-02).
+ * Until this mapping existed, every top item was forced through the
+ * song mapper: an artist top hit kept the artist's id but became a
+ * [Song], so the row's tap resolved the artist id as a song, failed,
+ * and the row read as a dead control. Items with no usable id map to
+ * null — the UI must never render a row it cannot act on.
+ */
+fun RawGlobalTopItemDto.toTopResult(): TopResult? {
+    val itemId = id?.takeIf { it.isNotBlank() } ?: return null
+    val itemTitle = title?.let { unescapeHtml(it) }.orEmpty()
+    val itemImage = MediaUrlFactory.bestImage(image)
+    return when (type?.lowercase()) {
+        "album" ->
+            TopResult.AlbumResult(
+                Album(
+                    id = itemId,
+                    name = itemTitle,
+                    artist = unescapeHtml(moreInfo?.music),
+                    imageUrl = itemImage,
+                    year = moreInfo?.year,
+                    songCount = null,
+                    description = description?.let { unescapeHtml(it) },
+                ),
+            )
+        "artist" ->
+            TopResult.ArtistResult(
+                Artist(
+                    id = itemId,
+                    name = itemTitle,
+                    imageUrl = itemImage,
+                ),
+            )
+        "playlist" ->
+            TopResult.PlaylistResult(
+                Playlist(
+                    id = itemId,
+                    name = itemTitle,
+                    imageUrl = itemImage,
+                    songCount = null,
+                    description = description?.let { unescapeHtml(it) },
+                ),
+            )
+        else ->
+            // "song", and the historical untyped shape: a song item.
+            TopResult.SongResult(
+                Song(
+                    id = itemId,
+                    name = itemTitle,
+                    artist = unescapeHtml(moreInfo?.primaryArtists ?: moreInfo?.singers),
+                    album = moreInfo?.album?.let { unescapeHtml(it) },
+                    imageUrl = itemImage,
+                    durationSec = null,
+                    streamUrl = null,
+                ),
+            )
+    }
+}
+
 fun RawGlobalSearchDto.toDomain(): GlobalSearch =
     GlobalSearch(
-        topSongs = topquery?.data.orEmpty().map { it.toDomain() },
+        topResults = topquery?.data.orEmpty().mapNotNull { it.toTopResult() },
         songs = songs?.data.orEmpty().map { it.toDomain() },
         albums = albums?.data.orEmpty().map { it.toDomain() },
         artists = artists?.data.orEmpty().map { it.toDomain() },

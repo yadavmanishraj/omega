@@ -336,43 +336,6 @@ fun ShimmerList() {
     }
 }
 
-/** Card-grid skeleton matching MediaCard dimensions (Search grids, Home rails). */
-@Composable
-fun ShimmerGrid() {
-    val phase = rememberShimmerPhase()
-    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
-    Column(Modifier.padding(horizontal = OmegaSpacing.lg)) {
-        repeat(2) {
-            Row {
-                repeat(2) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .padding(OmegaSpacing.sm),
-                    ) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(132.dp)
-                                .clip(RoundedCornerShape(OmegaRadius.lg))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .shimmerSweep(phase, highlight),
-                        )
-                        Spacer(Modifier.height(OmegaSpacing.sm))
-                        Box(
-                            Modifier
-                                .fillMaxWidth(0.8f)
-                                .height(12.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .shimmerSweep(phase, highlight),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 /**
  * Full-block error with a friendly cause+fix message and a recovery
  * action. Raw exception text never reaches this component (spec §3.4:
