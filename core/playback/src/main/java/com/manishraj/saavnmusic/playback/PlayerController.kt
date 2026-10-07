@@ -75,7 +75,16 @@ data class PlayerState(
 
         private fun sync(p: Player) {
             _state.update {
+                // Follow the player's current item so auto-advance (and
+                // next/prev) refresh the Now Playing song, not just
+                // user-initiated plays. Matched by mediaId (= song id);
+                // falls back to the existing song when the queue has
+                // no match (e.g. suggestions replaced the queue).
+                val mediaId = p.currentMediaItem?.mediaId
+                val advanced =
+                    mediaId?.let { id -> it.queue.firstOrNull { s -> s.id == id } }
                 it.copy(
+                    current = advanced ?: it.current,
                     isPlaying = p.isPlaying,
                     isBuffering = p.playbackState == Player.STATE_BUFFERING,
                     shuffle = p.shuffleModeEnabled,

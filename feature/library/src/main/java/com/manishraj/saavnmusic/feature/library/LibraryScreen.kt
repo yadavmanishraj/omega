@@ -37,10 +37,10 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,10 +48,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.data.repository.toSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
@@ -103,9 +103,17 @@ fun LibraryScreen(
     onOpenSearch: () -> Unit,
     initialTab: Int = LIBRARY_TAB_FAVORITES,
 ) {
-    // Keyed on initialTab: a navigation request carrying a different
-    // tab (e.g. Home's offline "Downloads" path) re-selects it.
-    var tab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
+    // The user's tab survives leaving and returning; a navigation
+    // request carrying a NEW tab argument (e.g. Home's offline
+    // "Downloads" path) is applied once, when the argument changes.
+    var tab by rememberSaveable { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
+    var appliedInitialTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    LaunchedEffect(initialTab) {
+        if (initialTab != appliedInitialTab) {
+            appliedInitialTab = initialTab
+            tab = initialTab.coerceIn(0, 3)
+        }
+    }
     val favs by vm.favorites.collectAsState()
     val dls by vm.downloads.collectAsState()
     val hist by vm.history.collectAsState()
@@ -553,26 +561,17 @@ private fun LibraryTabs(
     onSelect: (Int) -> Unit,
 ) {
     val labels = listOf("Favorites", "Downloads", "History", "Playlists")
-    val fontScale = LocalDensity.current.fontScale
-    if (fontScale >= 1.6f) {
-        ScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
-            labels.forEachIndexed { i, label ->
-                Tab(
-                    selected = tab == i,
-                    onClick = { onSelect(i) },
-                    text = { Text("$label · ${counts[i]}", maxLines = 1, softWrap = false) },
-                )
-            }
-        }
-    } else {
-        TabRow(selectedTabIndex = tab) {
-            labels.forEachIndexed { i, label ->
-                Tab(
-                    selected = tab == i,
-                    onClick = { onSelect(i) },
-                    text = { Text("$label · ${counts[i]}", maxLines = 1, softWrap = false) },
-                )
-            }
+    // Always scrollable: the fixed TabRow squeezes the labels (with
+    // counts) into truncation well below fontScale 1.6 — at the
+    // common LARGE setting (~1.3) "Downloads" already became
+    // "Downlo…". Scrollable tabs size to content and never compress.
+    ScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
+        labels.forEachIndexed { i, label ->
+            Tab(
+                selected = tab == i,
+                onClick = { onSelect(i) },
+                text = { Text("$label · ${counts[i]}", maxLines = 1, softWrap = false) },
+            )
         }
     }
 }
