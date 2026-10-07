@@ -1,5 +1,7 @@
 package com.manishraj.saavnmusic.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -20,10 +22,13 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -350,18 +355,36 @@ fun GradientHeader(
     imageUrl: String?,
     content: @Composable () -> Unit,
 ) {
+    // Artwork-derived header (UIUX_DESIGN §3.1.3): the gradient runs
+    // from the artwork's darkened palette color into the theme
+    // background, crossfading 300 ms when the artwork changes; header
+    // content uses the palette's contrast-checked on-color. Falls back
+    // to the deep-teal palette when there is no artwork.
+    val palette = rememberArtworkPalette(imageUrl)
+    val gradientTop by animateColorAsState(
+        targetValue = palette.mutedDark,
+        animationSpec = tween(durationMillis = 300),
+        label = "headerGradientTop",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = palette.onMutedDark,
+        animationSpec = tween(durationMillis = 300),
+        label = "headerContent",
+    )
     Box(
         Modifier
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        MaterialTheme.colorScheme.secondaryContainer,
+                        gradientTop,
                         MaterialTheme.colorScheme.background,
                     ),
                 ),
             ),
     ) {
-        Column(Modifier.padding(top = OmegaSpacing.lg)) { content() }
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Column(Modifier.padding(top = OmegaSpacing.lg)) { content() }
+        }
     }
 }
