@@ -17,4 +17,6 @@ dependencies {
     ksp(libs.hilt.work.compiler)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines)
+
+    testImplementation(libs.junit)
 }
