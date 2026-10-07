@@ -674,9 +674,21 @@ fun FullPlayer(
             LazyColumn {
                 itemsIndexed(st.queue, key = { index, s -> "$index-${s.id}" }) { index, s ->
                     val isCurrent = index == currentIndex
+                    // Expressive ListItem (alpha29): the headline is
+                    // the trailing `content` lambda and selection is a
+                    // first-class state — the classic headlineContent
+                    // overload is deprecated.
                     ListItem(
-                        headlineContent = { Text(s.name) },
-                        supportingContent = { Text(s.artist) },
+                        modifier =
+                            Modifier
+                                .animateItem()
+                                .clickable { vm.player.playIndex(index) }
+                                .semantics {
+                                    if (isCurrent) {
+                                        stateDescription = "Now playing"
+                                    }
+                                },
+                        selected = isCurrent,
                         leadingContent = { Artwork(s.imageUrl, 44, OmegaRadius.md) },
                         trailingContent =
                             if (isCurrent) {
@@ -690,6 +702,7 @@ fun FullPlayer(
                             } else {
                                 null
                             },
+                        supportingContent = { Text(s.artist) },
                         colors =
                             if (isCurrent) {
                                 ListItemDefaults.colors(
@@ -698,16 +711,9 @@ fun FullPlayer(
                             } else {
                                 ListItemDefaults.colors()
                             },
-                        modifier =
-                            Modifier
-                                .animateItem()
-                                .clickable { vm.player.playIndex(index) }
-                                .semantics {
-                                    if (isCurrent) {
-                                        stateDescription = "Now playing"
-                                    }
-                                },
-                    )
+                    ) {
+                        Text(s.name)
+                    }
                 }
             }
         }
