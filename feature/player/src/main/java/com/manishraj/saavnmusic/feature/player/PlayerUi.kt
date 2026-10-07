@@ -60,7 +60,8 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -549,7 +550,7 @@ fun FullPlayer(
         }
     }
     if (showQueue) {
-        val sheetState = rememberModalBottomSheetState()
+        val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
         val sheetScope = rememberCoroutineScope()
         ModalBottomSheet(
             onDismissRequest = { showQueue = false },
