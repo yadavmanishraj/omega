@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -259,16 +258,11 @@ fun MiniPlayer(
                                 },
                         )
                     }
-                    // Fixed-size slot: the spinner appears here without
-                    // shifting the transport buttons (no layout jumping).
-                    Box(
-                        Modifier.size(24.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (st.isBuffering) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        }
-                    }
+                    // Fixed-size slot keeping the transport cluster's
+                    // geometry stable. Buffering has exactly ONE signal in
+                    // the mini player — the wavy hairline above (Wave 2a);
+                    // the old spinner here duplicated it (Wave 4 note).
+                    Box(Modifier.size(24.dp))
                     IconButton(onClick = { vm.player.prev() }) {
                         Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
                     }
