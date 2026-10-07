@@ -44,3 +44,24 @@ are retained deliberately while any expressive API is used in the file
 (RESEARCH_2 §8), so a future alpha that re-gates any of these APIs fails
 loudly at exactly these recorded sites instead of silently changing
 behavior.
+
+Wave 3 notes (no new opt-in required, recorded for completeness): the
+shell (`MainActivity.kt` AppRoot) consumes `ShortNavigationBar` /
+`ShortNavigationBarItem` — verified against the alpha29 AAR: neither
+declaration carries an experimental marker (the 1.4-stable short bar
+survived into the 1.5 train under its stable name; the
+`FlexibleBottomBar` rename churn never landed). Item colors are the
+unified `NavigationItemColors` via `ShortNavigationBarItemDefaults`.
+The adaptive rail is the stock `NavigationRail` / `NavigationRailItem`
+behind a manual 600dp width switch — `NavigationSuiteScaffold` was
+NOT adopted: it ships in the separate
+`material3-adaptive-navigation-suite` artifact (a material3 POM dep,
+so present in the graph) but its default bar is the tall
+`NavigationBar`, which would have undone the short-bar adoption, and
+its custom-suite API is gated behind
+`ExperimentalMaterial3AdaptiveNavigationSuiteApi`. NavHost transitions
+in AppRoot consume the same graduated `MotionScheme` spec accessors as
+site #8 (`slowSpatialSpec` for the shared-axis slide,
+`defaultEffectsSpec` for fades / fade-through). `PlayerUi.kt`'s
+extracted `PlayerControls` / `PlayerTopBar` (landscape split, §6)
+reuse site #7's APIs within the same file and opt-ins.
