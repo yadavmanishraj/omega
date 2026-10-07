@@ -19,7 +19,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -92,7 +94,7 @@ fun compactCount(count: Long): String {
 fun Artwork(
     url: String?,
     size: Int = 56,
-    corner: Dp = OmegaRadius.md,
+    corner: Dp = OmegaRadius.lg,
     contentDescription: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -252,7 +254,7 @@ private const val SHIMMER_PAUSE_MS = 350L
  * pins to 0 and the blocks are static, exactly as before.
  */
 @Composable
-private fun rememberShimmerPhase(): Float {
+internal fun rememberShimmerPhase(): Float {
     val reducedMotion = LocalReducedMotion.current
     val sweepSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val phase = remember { Animatable(0f) }
@@ -274,7 +276,7 @@ private fun rememberShimmerPhase(): Float {
  * (0 = off-screen left, 1 = off-screen right). Draws nothing at phase
  * 0, which is the reduced-motion resting state. Applied AFTER the
  * block's clip + background so the band stays inside its corners. */
-private fun Modifier.shimmerSweep(
+internal fun Modifier.shimmerSweep(
     phase: Float,
     highlight: Color,
 ): Modifier =
@@ -309,7 +311,7 @@ fun ShimmerList() {
                 Box(
                     Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(OmegaRadius.md))
+                        .clip(RoundedCornerShape(OmegaRadius.lg))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .shimmerSweep(phase, highlight),
                 )
@@ -413,17 +415,64 @@ fun EmptyState(
 }
 
 /**
- * Section title row. [emphasized] swaps the baseline style for the
- * emphasized twin (M3 Expressive spec §2.2: weight, not size, carries
- * the emphasis) — reserved for the ONE rail a calm screen promotes
- * (Home's "Jump back in"); every other caller keeps the default.
+ * The one destructive-confirmation treatment (polish item 4):
+ * emphasis follows consequence — the destructive action is a FILLED
+ * button in the error family, and Cancel is de-emphasized to a
+ * neutral text button (onSurfaceVariant). The pre-polish dialogs
+ * inverted this: the destructive confirm whispered as error-colored
+ * text while Cancel wore the brand primary.
+ *
+ * This composable owns PRESENTATION only. The caller keeps its copy
+ * (title/text name the concrete consequence) and everything that
+ * happens after confirmation (deletes, Undo snackbars) — the dialog
+ * reports through [onConfirm] / [onDismiss] and holds no state.
+ */
+@Composable
+fun OmegaDestructiveConfirmDialog(
+    title: String,
+    text: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    dismissLabel: String = "Cancel",
+) {
+    val scheme = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = scheme.error,
+                        contentColor = scheme.onError,
+                    ),
+            ) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurfaceVariant),
+            ) { Text(dismissLabel) }
+        },
+    )
+}
+
+/**
+ * Section title row. Per M3 Expressive spec §2.2, section headers ARE
+ * titleMediumEmphasized — weight, not size, carries the emphasis —
+ * and every same-role header renders identically, so there is no
+ * emphasis flag: the pre-polish API defaulted to titleLarge (22sp)
+ * and its opt-in `emphasized` variant rendered SMALLER (16sp) than
+ * the default it claimed to promote.
  */
 @Composable
 fun SectionHeader(
     title: String,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
-    emphasized: Boolean = false,
 ) {
     Row(
         Modifier
@@ -433,12 +482,7 @@ fun SectionHeader(
     ) {
         Text(
             title,
-            style =
-                if (emphasized) {
-                    MaterialTheme.typography.titleMediumEmphasized
-                } else {
-                    MaterialTheme.typography.titleLarge
-                },
+            style = MaterialTheme.typography.titleMediumEmphasized,
             modifier = Modifier.weight(1f),
         )
         if (actionLabel != null && onAction != null) {
