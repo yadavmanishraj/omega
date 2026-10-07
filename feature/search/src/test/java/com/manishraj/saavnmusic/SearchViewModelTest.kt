@@ -56,8 +56,12 @@ class SearchViewModelTest {
     private class FakeUpstream : Interceptor {
         @Volatile var failing = false
 
+        /** Artificial per-call latency, to hold a search in flight. */
+        @Volatile var delayMs = 0L
+
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request()
+            if (delayMs > 0) Thread.sleep(delayMs)
             if (failing) throw IOException("Fake upstream is down")
             val body =
                 when (request.url.queryParameter("__call")) {
@@ -202,6 +206,104 @@ class SearchViewModelTest {
             val songs = (vm.songs.value as UiState.Success).data
             assertEquals(listOf("s1"), songs.map { it.id })
             awaitCondition("recent recorded") { repo.recentSearches.first() == listOf("bad") }
+        }
+
+    @Test
+    fun clearingQueryAfterSearchRestoresIdleAndClearsResults() =
+        runBlocking {
+            // Regression (exhaustive emulator QA BUG-8 / C14,
+            // 2026-10-07): tapping the field's × cleared the text
+            // but the previous results stayed on screen forever —
+            // `searchedQuery` was only ever set by a search, never
+            // reset, and the screen derives idle from it.
+            val vm = viewModel()
+            vm.search("arijit")
+            vm.awaitSearchLanded()
+            awaitCondition("recent recorded") { repo.recentSearches.first() == listOf("arijit") }
+            assertTrue(vm.albums.value.isNotEmpty())
+            assertTrue(vm.topResults.value.isNotEmpty())
+
+            vm.onQueryChange("")
+
+            assertEquals("", vm.query.value)
+            assertEquals("", vm.searchedQuery.value)
+            assertTrue(vm.topResults.value.isEmpty())
+            assertTrue(vm.albums.value.isEmpty())
+            assertTrue(vm.artists.value.isEmpty())
+            assertTrue(vm.playlists.value.isEmpty())
+            val songs = vm.songs.value
+            assertTrue(songs is UiState.Success && songs.data.isEmpty())
+            // Clearing the box is not clearing history: the recent
+            // the search earned stays for the idle view to show.
+            assertEquals(listOf("arijit"), repo.recentSearches.first())
+        }
+
+    @Test
+    fun whitespaceOnlyQueryAlsoReturnsToIdle() =
+        runBlocking {
+            // BUG-8's other face (C11): spaces in an emptied field
+            // kept the previous query's state — here, its results.
+            val vm = viewModel()
+            vm.search("arijit")
+            vm.awaitSearchLanded()
+            assertTrue(vm.albums.value.isNotEmpty())
+
+            vm.onQueryChange("   ")
+
+            assertEquals("", vm.searchedQuery.value)
+            assertTrue(vm.albums.value.isEmpty())
+            assertTrue(vm.topResults.value.isEmpty())
+            assertTrue(vm.playlists.value.isEmpty())
+        }
+
+    @Test
+    fun clearingDuringInFlightSearchCancelsItAndLateResponseStaysOut() =
+        runBlocking {
+            // The reset CANCELS the in-flight job: without that, the
+            // slow query would land after the clear and paint its
+            // results under the empty field.
+            val vm = viewModel()
+            // Five sequential upstream calls per search — at 400 ms
+            // each the search stays in flight for ~2 s.
+            upstream.delayMs = 400
+            vm.search("slow")
+            awaitCondition("search in flight") { vm.songs.value is UiState.Loading }
+
+            vm.onQueryChange("")
+            assertEquals("", vm.searchedQuery.value)
+            assertTrue(vm.songs.value is UiState.Success)
+
+            // Outlast the whole in-flight search, then prove its
+            // late completion never repopulated anything and earned
+            // no Recents slot.
+            delay(3_000)
+            upstream.delayMs = 0
+            assertEquals("", vm.searchedQuery.value)
+            assertTrue(vm.topResults.value.isEmpty())
+            assertTrue(vm.albums.value.isEmpty())
+            assertTrue(vm.artists.value.isEmpty())
+            assertTrue(vm.playlists.value.isEmpty())
+            val songs = vm.songs.value
+            assertTrue(songs is UiState.Success && songs.data.isEmpty())
+            assertTrue(repo.recentSearches.first().isEmpty())
+        }
+
+    @Test
+    fun searchAfterClearWorksAndRecordsRecent() =
+        runBlocking {
+            // The clear must not wedge the debounce path: typing a
+            // fresh query afterwards searches (and records) as usual.
+            val vm = viewModel()
+            vm.search("one")
+            awaitCondition("first recent") { repo.recentSearches.first() == listOf("one") }
+
+            vm.onQueryChange("")
+            assertEquals("", vm.searchedQuery.value)
+
+            vm.onQueryChange("two")
+            vm.awaitSearchLanded()
+            assertEquals("two", vm.searchedQuery.value)
+            awaitCondition("recent recorded") { repo.recentSearches.first() == listOf("two", "one") }
         }
 
     @Test

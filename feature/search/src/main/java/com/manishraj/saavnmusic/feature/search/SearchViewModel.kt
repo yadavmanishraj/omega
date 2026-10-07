@@ -121,13 +121,43 @@ class SearchViewModel
 
         fun onQueryChange(q: String) {
             query.value = q
-            pendingQuery.value = q.trim()
+            val trimmed = q.trim()
+            pendingQuery.value = trimmed
+            // An emptied field means the idle state (BUG-8): the
+            // screen derives idle from `searchedQuery`, which only
+            // runSearch ever set — so without this reset, clearing
+            // the box left the last query's results (or its
+            // no-results label) frozen under the empty field for
+            // the rest of the process lifetime.
+            if (trimmed.isBlank()) resetToIdle()
         }
 
         fun search(q: String) {
             query.value = q
             pendingQuery.value = ""
-            runSearch(q.trim())
+            val trimmed = q.trim()
+            if (trimmed.isBlank()) {
+                resetToIdle()
+            } else {
+                runSearch(trimmed)
+            }
+        }
+
+        /**
+         * Back to the idle state: no active query, every result
+         * holder cleared, and any in-flight search cancelled FIRST —
+         * a late response for the cleared query must never
+         * repopulate the holders this reset just emptied.
+         */
+        private fun resetToIdle() {
+            searchJob?.cancel()
+            searchJob = null
+            searchedQuery.value = ""
+            topResults.value = emptyList()
+            albums.value = emptyList()
+            artists.value = emptyList()
+            playlists.value = emptyList()
+            songs.value = UiState.Success(emptyList())
         }
 
         private fun runSearch(q: String) {

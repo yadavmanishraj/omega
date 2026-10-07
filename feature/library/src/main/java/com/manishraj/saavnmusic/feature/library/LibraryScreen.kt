@@ -70,6 +70,7 @@ import com.manishraj.saavnmusic.ui.components.OmegaSegmentedListItem
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
+import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
 /** Library tab indices, in tab-bar order. Navigation deep-links use these. */
@@ -391,7 +392,7 @@ fun LibraryScreen(
                         val ordered = sorted(dls, sortMode) { it.name }
                         Column {
                             Text(
-                                "${ordered.size} songs · ${formatBytes(ordered.sumOf { it.sizeBytes })} on this device",
+                                "${songCountLabel(ordered.size)} · ${formatBytes(ordered.sumOf { it.sizeBytes })} on this device",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.xs),
@@ -562,7 +563,7 @@ fun LibraryScreen(
                             items(pls, key = { it.id }) { p ->
                                 OmegaSegmentedListItem(
                                     headline = p.name,
-                                    supporting = "${p.songCount} songs",
+                                    supporting = songCountLabel(p.songCount),
                                     trailing = {
                                         IconButton(onClick = { pendingDeletePlaylist = p }) {
                                             Icon(
