@@ -5,6 +5,7 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlaylistRemove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
@@ -98,6 +101,7 @@ import com.manishraj.saavnmusic.playback.RepeatMode
 import com.manishraj.saavnmusic.playback.SLEEP_TIMER_PRESETS
 import com.manishraj.saavnmusic.playback.repeatModeFromEngine
 import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaFavoriteIcon
 import com.manishraj.saavnmusic.ui.components.OmegaPlayPauseIcon
@@ -211,14 +215,14 @@ fun MiniPlayer(
     // row, so the snackbar is the one announcement — claimed via
     // the ViewModel's arbiter after a short settle, so an in-flight
     // expansion lets the full player present the error inline
-    // instead (see ErrorChannelArbiter). Copy unchanged.
+    // instead (see ErrorChannelArbiter).
     val snackbar = LocalOmegaSnackbar.current
     LaunchedEffect(st.errorSeq) {
         val seq = st.errorSeq
         if (seq > 0) {
             delay(ERROR_SNACKBAR_SETTLE_MS)
             if (vm.claimErrorForSnackbar(seq)) {
-                snackbar?.showMessage("Couldn't play — check your connection")
+                snackbar?.showMessage("Couldn't play. Check your connection.")
             }
         }
     }
@@ -256,12 +260,17 @@ fun MiniPlayer(
                     if (st.isBuffering) {
                         LinearWavyProgressIndicator(Modifier.fillMaxWidth())
                     } else {
+                        // The determinate bar fills the whole slot
+                        // (polish item 23): at 2dp centered it read
+                        // as decoration at a glance; the slot height
+                        // was already reserved, so this costs no
+                        // layout shift.
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .height(2.dp),
+                                    .height(4.dp),
                         )
                     }
                 }
@@ -415,7 +424,22 @@ fun FullPlayer(
     val st by vm.state.collectAsState()
     val cur = st.current
     if (cur == null) {
-        Column(Modifier.padding(OmegaSpacing.xxl)) { Text("Nothing playing") }
+        // The kit's empty-state grammar (polish item 7), not a
+        // naked text: icon + headline + a way forward. "Browse
+        // music" collapses the player back to the shell, where
+        // Home / Search / Library live — the FullPlayer's existing
+        // back callback, no new navigation.
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            EmptyState(
+                title = "Nothing playing",
+                subtitle = "Choose a song and it will play here.",
+                actionLabel = "Browse music",
+                onAction = onBack,
+            )
+        }
         return
     }
     val fav by vm.isFavorite(cur.id).collectAsState(false)
@@ -633,23 +657,37 @@ fun FullPlayer(
                                     }
                                 },
                         leadingContent = { Artwork(s.imageUrl, 44, OmegaRadius.md) },
-                        trailingContent =
-                            if (isCurrent) {
-                                {
+                        trailingContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isCurrent) {
                                     Icon(
                                         Icons.Filled.GraphicEq,
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
-                            } else {
-                                null
-                            },
+                                // Per-row management (polish item
+                                // 19): every queue row can be removed
+                                // without disturbing the rest — see
+                                // PlayerController.removeFromQueue.
+                                QueueRowMenu(
+                                    songName = s.name,
+                                    onRemove = { vm.player.removeFromQueue(index) },
+                                )
+                            }
+                        },
                         supportingContent = { Text(s.artist) },
                         colors =
                             if (isCurrent) {
+                                // Selected treatment matches the kit's
+                                // OmegaSegmentedListItem exactly
+                                // (polish item 19): primaryContainer
+                                // with its on-colors, not the one-off
+                                // secondaryContainer this sheet used.
                                 ListItemDefaults.colors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    headlineColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    supportingColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                             } else {
                                 ListItemDefaults.colors()
@@ -704,6 +742,39 @@ private fun PlayerMenuItem(
             },
         onClick = onClick,
     )
+}
+
+/**
+ * Per-row overflow for queue rows (polish item 19): the queue
+ * sheet's one management action, "Remove from queue". Mirrors the
+ * kit's song-row menus (SongOverflowMenuButton in :core:ui): a
+ * MoreVert button that names its song, opening a menu whose single
+ * item carries the PlaylistRemove glyph.
+ */
+@Composable
+private fun QueueRowMenu(
+    songName: String,
+    onRemove: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Filled.MoreVert,
+                contentDescription = "More options for $songName",
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Remove from queue", maxLines = 1, softWrap = false) },
+                leadingIcon = { Icon(Icons.Filled.PlaylistRemove, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onRemove()
+                },
+            )
+        }
+    }
 }
 
 /**
@@ -762,7 +833,7 @@ private fun PlayerControls(
             )
             Spacer(Modifier.width(OmegaSpacing.xs))
             Text(
-                "Couldn't play — check your connection",
+                "Couldn't play. Check your connection.",
                 style = MaterialTheme.typography.bodySmall,
             )
             TextButton(onClick = { vm.player.retry() }) {
@@ -1038,17 +1109,39 @@ private fun PlayerControls(
     }
     if (showLyrics) {
         Spacer(Modifier.height(OmegaSpacing.md))
-        Text(
-            text =
-                when {
-                    lyrics != null -> lyrics!!
-                    !lyricsLoaded -> "Loading lyrics…"
-                    // The lyrics call is the test (validation §3):
-                    // a null result after it completes means none.
-                    else -> "No lyrics available for this song"
-                },
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        // Lyrics containment (polish item 25): the block joins the
+        // app's segmented grammar: a filled surface with a
+        // "Lyrics" header, instead of bare text appended under
+        // the controls. Hand-rolled in the SettingsSegment /
+        // SettingsCard grammar (surfaceContainerHigh +
+        // shapes.large, primary header) because the kit has no
+        // free-form segmented container at this base; adopt
+        // OmegaSegmentedContainer here when it lands.
+        Surface(
+            Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.large,
+        ) {
+            Column(Modifier.padding(OmegaSpacing.lg)) {
+                Text(
+                    "Lyrics",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(OmegaSpacing.md))
+                Text(
+                    text =
+                        when {
+                            lyrics != null -> lyrics!!
+                            !lyricsLoaded -> "Loading lyrics…"
+                            // The lyrics call is the test (validation §3):
+                            // a null result after it completes means none.
+                            else -> "No lyrics available for this song"
+                        },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
         // Clearance (F-09): the lyrics block is the column's last
         // content; without tail room its last line can sit under the
         // shell's bottom chrome. The extra spacer guarantees the
