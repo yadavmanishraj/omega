@@ -21,6 +21,15 @@ data class PlayerState(
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val speed: Float = 1f,
+    /**
+     * The last playback failure, surfaced honestly to the UI (player
+     * error line + snackbar) instead of the old silent 0:00 player.
+     * Cleared on the next successful prepare (STATE_READY), on a new
+     * queue, and by [PlayerController.retry].
+     */
+    val errorMessage: String? = null,
+    /** Monotonic count of failures, so the UI reacts once per error. */
+    val errorSeq: Int = 0,
 )
 
 @Singleton class PlayerController
@@ -58,6 +67,21 @@ data class PlayerState(
                     ) {
                         sync(p)
                     }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        // A failed stream (offline tap on a song that
+                        // was never downloaded, dead URL) used to sit
+                        // at 0:00 with zero feedback. Surface it: the
+                        // player UI shows an error line + Retry and
+                        // fires a snackbar (Wave 2a, phone-QA minor).
+                        _state.update {
+                            it.copy(
+                                errorMessage = error.message ?: "Playback error",
+                                errorSeq = it.errorSeq + 1,
+                                isBuffering = false,
+                            )
+                        }
+                    }
                 },
             )
             scope.launch {
@@ -90,8 +114,41 @@ data class PlayerState(
                     shuffle = p.shuffleModeEnabled,
                     repeatMode = p.repeatMode,
                     speed = p.playbackParameters.speed,
+                    // A successful prepare heals the surfaced error
+                    // (auto-advance recovered, Retry worked, ...).
+                    errorMessage =
+                        if (p.playbackState == Player.STATE_READY) null else it.errorMessage,
                 )
             }
+        }
+
+        /** Stream quality of the most recent [playQueue]; reused by [insertNext]. */
+        private var lastQuality: String = "320kbps"
+
+        /** Builds the timeline item for [song] at [quality], or null when the song has no playable URL. */
+        private fun mediaItemFor(
+            song: Song,
+            quality: String,
+        ): MediaItem? {
+            val url =
+                song.downloadUrls.firstOrNull { it.first == quality }?.second ?: song.streamUrl
+                    ?: return null
+            return MediaItem
+                .Builder()
+                .setUri(url)
+                .setMediaId(song.id)
+                .setMediaMetadata(
+                    MediaMetadata
+                        .Builder()
+                        .setTitle(song.name)
+                        .setArtist(song.artist)
+                        .setAlbumTitle(song.album)
+                        .setArtworkUri(
+                            song.imageUrl?.let {
+                                android.net.Uri.parse(it)
+                            },
+                        ).build(),
+                ).build()
         }
 
         fun playQueue(
@@ -101,38 +158,52 @@ data class PlayerState(
         ) {
             val c =
                 controller ?: return
-            val items =
-                songs.mapNotNull { s ->
-                    val url =
-                        s.downloadUrls.firstOrNull { it.first == quality }?.second ?: s.streamUrl
-                    if (url ==
-                        null
-                    ) {
-                        null
-                    } else {
-                        MediaItem
-                            .Builder()
-                            .setUri(
-                                url,
-                            ).setMediaId(
-                                s.id,
-                            ).setMediaMetadata(
-                                MediaMetadata
-                                    .Builder()
-                                    .setTitle(
-                                        s.name,
-                                    ).setArtist(s.artist)
-                                    .setAlbumTitle(s.album)
-                                    .setArtworkUri(
-                                        s.imageUrl?.let {
-                                            android.net.Uri.parse(it)
-                                        },
-                                    ).build(),
-                            ).build()
-                    }
-                }
-            _state.update { it.copy(queue = songs, current = songs.getOrNull(start)) }
+            lastQuality = quality
+            val items = songs.mapNotNull { s -> mediaItemFor(s, quality) }
+            _state.update {
+                it.copy(queue = songs, current = songs.getOrNull(start), errorMessage = null)
+            }
             c.setMediaItems(items, start.coerceAtLeast(0), 0L)
+            c.prepare()
+            c.play()
+        }
+
+        /**
+         * "Play next": inserts [song] into the timeline immediately
+         * after the current item and mirrors the insertion in
+         * [PlayerState.queue]. With no active queue the song is
+         * appended (to timeline and state) WITHOUT starting playback
+         * and reported as [InsertNextResult.APPENDED] — see
+         * [planInsertNext] for the full semantics. Menu wiring lives
+         * in the feature modules (a later mini-wave); this is only
+         * the engine op.
+         */
+        fun insertNext(song: Song): InsertNextResult {
+            val st = _state.value
+            val timelineIndex = controller?.currentMediaItemIndex ?: -1
+            val currentIndex =
+                if (timelineIndex >= 0) {
+                    timelineIndex
+                } else {
+                    st.queue.indexOfFirst { it.id == st.current?.id }
+                }
+            val plan = planInsertNext(st.queue, currentIndex, song)
+            controller?.let { c ->
+                mediaItemFor(song, lastQuality)?.let { item -> c.addMediaItem(plan.index, item) }
+            }
+            _state.update { it.copy(queue = plan.queue) }
+            return plan.result
+        }
+
+        /**
+         * Retries after a playback error: re-prepares the current
+         * item so ExoPlayer re-runs its load, then plays. The
+         * surfaced error is cleared up front; if the retry fails too,
+         * [Player.Listener.onPlayerError] surfaces a fresh one.
+         */
+        fun retry() {
+            val c = controller ?: return
+            _state.update { it.copy(errorMessage = null) }
             c.prepare()
             c.play()
         }

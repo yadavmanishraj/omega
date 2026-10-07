@@ -5,12 +5,9 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,39 +17,49 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButtonShapes
+import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.IconToggleButtonShapes
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +74,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -75,7 +84,12 @@ import androidx.work.WorkManager
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
+import com.manishraj.saavnmusic.playback.PlayerState
 import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
+import com.manishraj.saavnmusic.ui.components.OmegaChoiceGroup
+import com.manishraj.saavnmusic.ui.components.OmegaFavoriteIcon
+import com.manishraj.saavnmusic.ui.components.OmegaPlayPauseIcon
 import com.manishraj.saavnmusic.ui.components.animatePaletteColor
 import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
 import com.manishraj.saavnmusic.ui.components.safeGradientEnd
@@ -89,6 +103,19 @@ import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
  * song, so a track change never morphs between two different artworks.
  */
 private fun artworkSharedElementKey(songId: String): String = "artwork-$songId"
+
+/**
+ * Transport toggle shape morph (M3 Expressive spec §1.8 / §5): round
+ * at rest, squared on press and while checked — the shape itself
+ * reports the state, not just the tint. Shared by shuffle and repeat.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private val transportToggleShapes =
+    IconToggleButtonShapes(
+        shape = CircleShape,
+        pressedShape = RoundedCornerShape(8.dp),
+        checkedShape = RoundedCornerShape(8.dp),
+    )
 
 /**
  * The current song's artwork, shared between the mini-player and the
@@ -133,10 +160,12 @@ private fun SharedArtwork(
 
 /**
  * Mini-player (REDESIGN_SPEC §3.2): sacred — anchored above the nav bar,
- * swipe/back never stops playback. Progress hairline on top, a fixed
- * 24dp buffering slot so the layout never shifts, 48dp targets.
+ * swipe/back never stops playback. Progress hairline on top (wavy
+ * while buffering — the media-surface wave, spec §5), a fixed 24dp
+ * buffering slot so the layout never shifts, 48dp targets. Calm
+ * surface: baseline type only, no emphasized twins (spec §2.2).
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MiniPlayer(
     vm: PlayerViewModel = hiltViewModel(),
@@ -168,13 +197,27 @@ fun MiniPlayer(
                     } else {
                         0f
                     }
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(2.dp),
-                )
+                // Fixed 4dp strip: the determinate hairline and the
+                // buffering wave occupy the same slot, so the bar
+                // never changes height when buffering starts/stops.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (st.isBuffering) {
+                        LinearWavyProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp),
+                        )
+                    }
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -223,10 +266,7 @@ fun MiniPlayer(
                         Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
                     }
                     IconButton(onClick = { vm.player.playPause() }) {
-                        Icon(
-                            if (st.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (st.isPlaying) "Pause" else "Play",
-                        )
+                        OmegaPlayPauseIcon(isPlaying = st.isPlaying)
                     }
                     IconButton(onClick = { vm.player.next() }) {
                         Icon(Icons.Filled.SkipNext, contentDescription = "Next")
@@ -238,11 +278,68 @@ fun MiniPlayer(
 }
 
 /**
- * Full player (spec §3.3): the play button is the screen's single
- * primary CTA (primary container, onPrimary glyph, 64dp); time labels
- * use tabular figures; queue is a sheet with an "Up next" header.
+ * Expressive seek bar (spec §3/§5/§8): the stateful [SliderState]
+ * slider from material3 1.5. Playback position drives the thumb while
+ * the user is not touching it — assigned, never animated: the seek
+ * value is clock data and springs are forbidden on it (spec §4.7).
+ * TalkBack hears a time value text ("1:23 of 3:45") via
+ * [stateDescription], closing the standing slider a11y gap.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SeekBar(
+    st: PlayerState,
+    fallbackDurationSec: Long?,
+    onSeek: (Long) -> Unit,
+) {
+    val durationSec =
+        if (st.durationMs > 0) st.durationMs / 1000 else fallbackDurationSec ?: 0L
+    val sliderState: SliderState = rememberSliderState()
+    var scrubbing by remember { mutableStateOf(false) }
+    val playedFraction =
+        if (st.durationMs > 0) {
+            (st.positionMs.toFloat() / st.durationMs).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+    LaunchedEffect(playedFraction, scrubbing) {
+        if (!scrubbing) {
+            sliderState.value = playedFraction
+        }
+    }
+    val shownSec = (sliderState.value * durationSec).toLong()
+    Slider(
+        state = sliderState,
+        onValueChange = {
+            sliderState.value = it
+            scrubbing = true
+        },
+        onValueChangeFinished = {
+            scrubbing = false
+            onSeek((sliderState.value * st.durationMs).toLong())
+        },
+        modifier =
+            Modifier.semantics {
+                stateDescription = "${formatDuration(shownSec)} of ${formatDuration(durationSec)}"
+            },
+    )
+}
+
+/**
+ * Full player (spec §5): THE hero surface. Title in
+ * displaySmallEmphasized, the play button is the screen's single
+ * primary CTA (palette rolePrimary fill, 72dp, press shape morph),
+ * shuffle/repeat are expressive toggle buttons whose state is carried
+ * by shape + [stateDescription] (not tint alone), and the secondary
+ * cluster (favorite/download/lyrics/sleep/speed) is de-emphasized
+ * below them. Time labels use tabular figures; queue is a sheet with
+ * an "Up next" header.
+ */
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalSharedTransitionApi::class,
+)
 @Composable
 fun FullPlayer(
     vm: PlayerViewModel = hiltViewModel(),
@@ -259,6 +356,16 @@ fun FullPlayer(
         return
     }
     val fav by vm.isFavorite(cur.id).collectAsState(false)
+    val downloaded by vm.isDownloaded(cur.id).collectAsState(false)
+    // Playback failures surface here (and once per failure as a
+    // snackbar): the silent 0:00 player on an offline tap was a
+    // phone-QA minor; the controller now reports the error honestly.
+    val snackbar = LocalOmegaSnackbar.current
+    LaunchedEffect(st.errorSeq) {
+        if (st.errorSeq > 0) {
+            snackbar?.showMessage("Couldn't play — check your connection")
+        }
+    }
     // Artwork gradient (UIUX_DESIGN §3.1.3): mutedDark at the top
     // crossfading on the shared palette helper (spec §4.4) on track
     // change, theme background at the bottom. Header text/icons sit
@@ -272,6 +379,22 @@ fun FullPlayer(
     val artworkContentColor by animatePaletteColor(
         targetValue = palette.onMutedDark,
         label = "playerArtworkContent",
+    )
+    // Palette ROLE colors (spec §1.3/§2.4): the play fill is the
+    // artwork's primary role; active toggles and the downloaded state
+    // speak in the tertiary role — no raw vibrant/dominant at call
+    // sites.
+    val playFill by animatePaletteColor(
+        targetValue = palette.rolePrimary,
+        label = "playerPlayFill",
+    )
+    val playContent by animatePaletteColor(
+        targetValue = palette.onRolePrimary,
+        label = "playerPlayContent",
+    )
+    val tertiaryAccent by animatePaletteColor(
+        targetValue = palette.roleTertiary,
+        label = "playerTertiaryAccent",
     )
     // Fade end must keep the content color at 4.5:1 (see
     // safeGradientEnd) — in light themes the title/artist washed
@@ -289,6 +412,17 @@ fun FullPlayer(
     var lyrics by remember { mutableStateOf<String?>(null) }
     var lyricsLoaded by remember { mutableStateOf(false) }
     var sleep by remember { mutableIntStateOf(0) }
+    val cycleSleep: () -> Unit = {
+        val next =
+            when (sleep) {
+                0 -> 15
+                15 -> 30
+                30 -> 60
+                else -> 0
+            }
+        sleep = next
+        vm.player.setSleepTimer(next)
+    }
     LaunchedEffect(showLyrics, cur.id) {
         if (showLyrics) {
             lyricsLoaded = false
@@ -335,30 +469,53 @@ fun FullPlayer(
             Spacer(Modifier.height(OmegaSpacing.xl))
             Text(
                 cur.name,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.displaySmallEmphasized,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 cur.artist,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = artworkContentColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
+            if (st.errorMessage != null) {
+                Spacer(Modifier.height(OmegaSpacing.sm))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.ErrorOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(OmegaSpacing.xs))
+                    Text(
+                        "Couldn't play — check your connection",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(onClick = { vm.player.retry() }) {
+                        Text("Retry")
+                    }
+                }
+            }
             Spacer(Modifier.height(OmegaSpacing.lg))
-            var scrub by remember { mutableStateOf<Float?>(null) }
-            Slider(
-                value =
-                    scrub ?: if (st.durationMs > 0) {
-                        st.positionMs.toFloat() / st.durationMs
-                    } else {
-                        0f
-                    },
-                onValueChange = { scrub = it },
-                onValueChangeFinished = {
-                    scrub?.let { vm.player.seekTo((it * st.durationMs).toLong()) }
-                    scrub = null
-                },
+            SeekBar(
+                st = st,
+                fallbackDurationSec = cur.durationSec,
+                onSeek = { vm.player.seekTo(it) },
             )
+            // Fixed-height buffering slot under the slider: the wavy
+            // strip (spec §3 — the wave belongs on media surfaces)
+            // appears while buffering without shifting the time row.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+            ) {
+                if (st.isBuffering) {
+                    LinearWavyProgressIndicator(Modifier.fillMaxWidth())
+                }
+            }
             Row(Modifier.fillMaxWidth()) {
                 Text(formatDuration(st.positionMs / 1000), style = TabularTimeStyle)
                 Spacer(Modifier.weight(1f))
@@ -368,99 +525,127 @@ fun FullPlayer(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { vm.player.toggleShuffle() }) {
-                    Icon(
-                        Icons.Filled.Shuffle,
-                        contentDescription = if (st.shuffle) "Shuffle on" else "Shuffle off",
-                        tint = if (st.shuffle) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                    )
+                IconToggleButton(
+                    checked = st.shuffle,
+                    onCheckedChange = { vm.player.toggleShuffle() },
+                    shapes = transportToggleShapes,
+                    colors =
+                        IconButtonDefaults.iconToggleButtonColors(
+                            checkedContentColor = tertiaryAccent,
+                        ),
+                    modifier =
+                        Modifier.semantics {
+                            stateDescription = if (st.shuffle) "Shuffle on" else "Shuffle off"
+                        },
+                ) {
+                    Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle")
                 }
                 IconButton(onClick = { vm.player.prev() }) {
                     Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp))
                 }
                 FilledIconButton(
                     onClick = { vm.player.playPause() },
-                    modifier = Modifier.size(64.dp),
+                    modifier = Modifier.size(72.dp),
+                    shapes =
+                        IconButtonShapes(
+                            shape = CircleShape,
+                            pressedShape = RoundedCornerShape(16.dp),
+                        ),
                     colors =
                         IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            containerColor = playFill,
+                            contentColor = playContent,
                         ),
                 ) {
-                    Icon(
-                        if (st.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (st.isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(32.dp),
-                    )
+                    OmegaPlayPauseIcon(isPlaying = st.isPlaying, modifier = Modifier.size(36.dp))
                 }
                 IconButton(onClick = { vm.player.next() }) {
                     Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
                 }
-                IconButton(onClick = { vm.player.cycleRepeat() }) {
+                IconToggleButton(
+                    checked = st.repeatMode != 0,
+                    onCheckedChange = { vm.player.cycleRepeat() },
+                    shapes = transportToggleShapes,
+                    colors =
+                        IconButtonDefaults.iconToggleButtonColors(
+                            checkedContentColor = tertiaryAccent,
+                        ),
+                    modifier =
+                        Modifier.semantics {
+                            stateDescription =
+                                when (st.repeatMode) {
+                                    1 -> "Repeat all"
+                                    2 -> "Repeat one"
+                                    else -> "Repeat off"
+                                }
+                        },
+                ) {
                     Icon(
                         if (st.repeatMode == 2) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
-                        contentDescription =
-                            when (st.repeatMode) {
-                                1 -> "Repeat all"
-                                2 -> "Repeat one"
-                                else -> "Repeat off"
-                            },
-                        tint = if (st.repeatMode != 0) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        contentDescription = "Repeat",
                     )
                 }
             }
             Row {
                 IconButton(onClick = { vm.toggleFavorite(cur, fav) }) {
-                    Icon(
-                        if (fav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = if (fav) "Remove from favorites" else "Add to favorites",
-                        tint = if (fav) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    OmegaFavoriteIcon(
+                        isFavorite = fav,
+                        tint = if (fav) tertiaryAccent else LocalContentColor.current,
                     )
                 }
-                IconButton(onClick = {
-                    DownloadWorker.enqueue(WorkManager.getInstance(ctx), cur, vm.appSettings.value.downloadQuality)
-                }) {
-                    Icon(Icons.Filled.Download, contentDescription = "Download")
+                IconButton(
+                    onClick = {
+                        if (!downloaded) {
+                            DownloadWorker.enqueue(
+                                WorkManager.getInstance(ctx),
+                                cur,
+                                vm.appSettings.value.downloadQuality,
+                            )
+                        }
+                    },
+                ) {
+                    Icon(
+                        if (downloaded) Icons.Filled.DownloadDone else Icons.Filled.Download,
+                        contentDescription = if (downloaded) "Downloaded" else "Download",
+                        tint = if (downloaded) tertiaryAccent else LocalContentColor.current,
+                    )
                 }
                 IconButton(onClick = { showLyrics = !showLyrics }) {
                     Icon(Icons.Filled.Lyrics, contentDescription = "Lyrics")
                 }
-                IconButton(onClick = {
-                    val next =
-                        when (sleep) {
-                            0 -> 15
-                            15 -> 30
-                            30 -> 60
-                            else -> 0
-                        }
-                    sleep = next
-                    vm.player.setSleepTimer(next)
-                }) {
-                    Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
-                }
+                // Sleep timer, de-emphasized in the secondary cluster:
+                // a plain icon while off; once running it becomes a
+                // tonal chip carrying the set minutes, as before.
                 if (sleep > 0) {
-                    Text(
-                        "${sleep}m",
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    FilledTonalButton(
+                        onClick = cycleSleep,
+                        contentPadding =
+                            PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterVertically)
+                                .height(36.dp),
+                    ) {
+                        Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer", modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(OmegaSpacing.xs))
+                        Text("${sleep}m", maxLines = 1, softWrap = false)
+                    }
+                } else {
+                    IconButton(onClick = cycleSleep) {
+                        Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
+                    }
                 }
             }
             Text("Speed", style = MaterialTheme.typography.bodySmall)
-            // FlowRow so the chips wrap instead of overflowing on narrow
-            // screens / large font sizes (same bug as the settings chips).
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-            ) {
-                listOf(0.75f, 1f, 1.25f, 1.5f).forEach { v ->
-                    FilterChip(
-                        selected = st.speed == v,
-                        onClick = { vm.player.setSpeed(v) },
-                        label = { Text("${v}x", maxLines = 1, softWrap = false) },
-                    )
-                }
-            }
+            // Connected choice group (spec §3): replaces the FilterChip
+            // row; options that cannot fit overflow into the group's
+            // menu instead of crushing at large font scales.
+            OmegaChoiceGroup(
+                options = listOf(0.75f, 1f, 1.25f, 1.5f),
+                selected = st.speed,
+                onSelect = { vm.player.setSpeed(it) },
+                label = { v -> "${v}x" },
+            )
             if (showLyrics) {
                 Spacer(Modifier.height(OmegaSpacing.md))
                 Text(
@@ -484,14 +669,51 @@ fun FullPlayer(
                 modifier = Modifier.padding(OmegaSpacing.lg),
                 style = MaterialTheme.typography.titleMedium,
             )
+            val currentIndex = st.queue.indexOfFirst { it.id == cur.id }
             LazyColumn {
-                items(st.queue) { s ->
+                itemsIndexed(st.queue, key = { index, s -> "$index-${s.id}" }) { index, s ->
+                    val isCurrent = index == currentIndex
+                    // Expressive ListItem (alpha29): the selectable
+                    // overload — headline is the trailing `content`
+                    // lambda, selection and click are first-class.
+                    // The classic headlineContent overload is
+                    // deprecated.
                     ListItem(
-                        headlineContent = { Text(s.name) },
-                        supportingContent = { Text(s.artist) },
+                        selected = isCurrent,
+                        onClick = { vm.player.playIndex(index) },
+                        modifier =
+                            Modifier
+                                .animateItem()
+                                .semantics {
+                                    if (isCurrent) {
+                                        stateDescription = "Now playing"
+                                    }
+                                },
                         leadingContent = { Artwork(s.imageUrl, 44, OmegaRadius.md) },
-                        modifier = Modifier.clickable { vm.player.playIndex(st.queue.indexOf(s)) },
-                    )
+                        trailingContent =
+                            if (isCurrent) {
+                                {
+                                    Icon(
+                                        Icons.Filled.GraphicEq,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                        supportingContent = { Text(s.artist) },
+                        colors =
+                            if (isCurrent) {
+                                ListItemDefaults.colors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                )
+                            } else {
+                                ListItemDefaults.colors()
+                            },
+                    ) {
+                        Text(s.name)
+                    }
                 }
             }
         }

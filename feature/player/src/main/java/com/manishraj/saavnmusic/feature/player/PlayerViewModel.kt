@@ -7,8 +7,10 @@ import com.manishraj.saavnmusic.data.settings.AppSettings
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.playback.PlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -34,6 +36,16 @@ class PlayerViewModel
         }
 
         fun isFavorite(id: String) = repo.isFavorite(id)
+
+        /**
+         * Whether [id] is fully downloaded on this device. Mirrors the
+         * Library path (the downloads Room flow on [MusicRepository]);
+         * the player uses it for the download button's Downloaded state.
+         */
+        fun isDownloaded(id: String): Flow<Boolean> =
+            repo.downloads.map { list ->
+                list.any { it.songId == id && it.status == "COMPLETED" }
+            }
 
         fun toggleFavorite(
             s: Song,
