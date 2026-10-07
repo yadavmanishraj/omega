@@ -112,7 +112,7 @@ class SearchViewModelTest {
 
     private suspend fun awaitCondition(
         description: String,
-        condition: () -> Boolean,
+        condition: suspend () -> Boolean,
     ) {
         val deadline = System.currentTimeMillis() + TIMEOUT_MS
         while (!condition()) {
