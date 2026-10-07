@@ -52,9 +52,10 @@ fun Artwork(
     size: Int = 56,
     corner: Dp = OmegaRadius.md,
     contentDescription: String? = null,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        Modifier
+        modifier
             .size(size.dp)
             .clip(RoundedCornerShape(corner))
             .background(MaterialTheme.colorScheme.surfaceVariant),
