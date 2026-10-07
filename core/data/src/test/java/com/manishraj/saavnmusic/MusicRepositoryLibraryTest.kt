@@ -117,6 +117,64 @@ class MusicRepositoryLibraryTest {
             assertTrue(repo.localPlaylists.first().isEmpty())
         }
 
+    @Test
+    fun removeFromPlaylistDeletesOnlyThatMembership() =
+        runTest {
+            val firstId = repo.createPlaylist("One")
+            val secondId = repo.createPlaylist("Two")
+            repo.addToPlaylist(firstId, song("a"))
+            repo.addToPlaylist(firstId, song("b"))
+            repo.addToPlaylist(firstId, song("c"))
+            repo.addToPlaylist(secondId, song("b"))
+
+            val removed = repo.removeFromPlaylist(firstId, song("b"))
+            assertEquals(1, removed?.position)
+
+            // The other rows keep their positions; the same song in
+            // the OTHER playlist is a different membership and stays.
+            val firstRows = dao.playlistSongs(firstId).first()
+            assertEquals(listOf("a", "c"), firstRows.map { it.songId })
+            assertEquals(listOf(0, 2), firstRows.map { it.position })
+            assertEquals(listOf("b"), dao.playlistSongs(secondId).first().map { it.songId })
+            assertEquals(
+                2,
+                repo.localPlaylists
+                    .first()
+                    .first { it.id == firstId }
+                    .songCount,
+            )
+        }
+
+    @Test
+    fun restoreToPlaylistReInsertsAtOriginalPosition() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b"))
+            repo.addToPlaylist(playlistId, song("c"))
+
+            val removed = repo.removeFromPlaylist(playlistId, song("b"))
+            assertEquals("b", removed?.song?.id)
+            repo.restoreToPlaylist(removed!!)
+
+            // Full pre-removal state: same songs, same order, same
+            // stored positions (Undo must not append at the end).
+            val rows = dao.playlistSongs(playlistId).first()
+            assertEquals(listOf("a", "b", "c"), rows.map { it.songId })
+            assertEquals(listOf(0, 1, 2), rows.map { it.position })
+            assertEquals("Song b", rows[1].name)
+        }
+
+    @Test
+    fun removeFromPlaylistForMissingSongReturnsNull() =
+        runTest {
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+
+            assertNull(repo.removeFromPlaylist(playlistId, song("zzz")))
+            assertEquals(listOf("a"), repo.playlistSongs(playlistId).first().map { it.id })
+        }
+
     // ---- Favorites ----
 
     @Test

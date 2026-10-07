@@ -154,6 +154,18 @@ data class LocalPlaylistRow(
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addToPlaylist(e: LocalPlaylistSongEntity)
 
+    @Query("SELECT * FROM local_playlist_songs WHERE playlistId=:pid AND songId=:sid")
+    suspend fun playlistSong(
+        pid: Long,
+        sid: String,
+    ): LocalPlaylistSongEntity?
+
+    @Query("DELETE FROM local_playlist_songs WHERE playlistId=:pid AND songId=:sid")
+    suspend fun removeFromPlaylist(
+        pid: Long,
+        sid: String,
+    )
+
     @Query("SELECT COUNT(*) FROM local_playlist_songs WHERE playlistId=:id")
     suspend fun playlistSongCount(id: Long): Int
 
