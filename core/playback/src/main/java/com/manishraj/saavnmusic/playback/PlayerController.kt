@@ -209,9 +209,12 @@ data class PlayerState(
                     override fun onPlayerError(error: PlaybackException) {
                         // A failed stream (offline tap on a song that
                         // was never downloaded, dead URL) used to sit
-                        // at 0:00 with zero feedback. Surface it: the
-                        // player UI shows an error line + Retry and
-                        // fires a snackbar (Wave 2a, phone-QA minor).
+                        // at 0:00 with zero feedback. Surface it in
+                        // state; the UI presents each failure on
+                        // exactly ONE surface — the full player's
+                        // inline row + Retry, or a snackbar from the
+                        // mini-player when collapsed — arbitrated
+                        // by errorSeq (feature:player, Task 4).
                         _state.update {
                             it.copy(
                                 errorMessage = error.message ?: "Playback error",
@@ -524,10 +527,5 @@ data class PlayerState(
                     controller?.pause()
                     persistSession()
                 }
-        }
-
-        /** The sleep button's whole behavior: cycle the preset (off → 15 → 30 → 60 → off). */
-        fun cycleSleepTimer() {
-            setSleepTimer(nextSleepPreset(sleepTimer.armedMinutes))
         }
     }

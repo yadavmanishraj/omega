@@ -16,14 +16,16 @@ package com.manishraj.saavnmusic.playback
  * following the [PendingSeekTracker] pattern.
  */
 
-/** The preset cycle the sleep button walks: off → 15 → 30 → 60 → off. */
-fun nextSleepPreset(armedMinutes: Int): Int =
-    when (armedMinutes) {
-        0 -> 15
-        15 -> 30
-        30 -> 60
-        else -> 0
-    }
+/**
+ * The sleep-timer preset set, in minutes — the choices the
+ * player's sleep menu offers (besides Off). Selection is DIRECT:
+ * choosing a preset arms exactly it via
+ * [PlayerController.setSleepTimer]; there is no cycle. The old
+ * tap-to-cycle moon hid the choices from the user entirely —
+ * every exploratory tap changed the commitment instead of
+ * revealing the options (impeccable critique, Task 4).
+ */
+val SLEEP_TIMER_PRESETS: List<Int> = listOf(15, 30, 60)
 
 /**
  * Tracks one armed timer: the preset the user chose and the

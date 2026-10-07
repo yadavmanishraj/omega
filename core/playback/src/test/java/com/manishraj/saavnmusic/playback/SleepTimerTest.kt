@@ -6,22 +6,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Sleep-timer truth (F-05): the preset cycle the button walks and
- * the deadline math the published countdown is derived from.
+ * Sleep-timer truth (F-05): the preset set the menu offers, the
+ * direct-selection semantics it arms with, and the deadline math
+ * the published countdown is derived from.
  */
 class SleepTimerTest {
     @Test
-    fun `preset cycle walks 0-15-30-60-off`() {
-        assertEquals(15, nextSleepPreset(0))
-        assertEquals(30, nextSleepPreset(15))
-        assertEquals(60, nextSleepPreset(30))
-        assertEquals(0, nextSleepPreset(60))
+    fun `preset set offered by the menu is 15-30-60`() {
+        assertEquals(listOf(15, 30, 60), SLEEP_TIMER_PRESETS)
     }
 
     @Test
-    fun `unknown preset falls back to off`() {
-        assertEquals(0, nextSleepPreset(45))
-        assertEquals(0, nextSleepPreset(-5))
+    fun `direct selection arms exactly the chosen preset from any state`() {
+        val tracker = SleepTimerTracker()
+        // From off, choosing 30 arms 30 — not a step toward it.
+        tracker.arm(30, nowMs = 0)
+        assertEquals(30, tracker.armedMinutes)
+        // While 30 is armed, choosing 15 lands on 15: selection is
+        // absolute, never "next in a cycle".
+        tracker.arm(15, nowMs = 0)
+        assertEquals(15, tracker.armedMinutes)
+        tracker.arm(60, nowMs = 0)
+        assertEquals(60, tracker.armedMinutes)
+        // Every preset the menu offers arms exactly.
+        SLEEP_TIMER_PRESETS.forEach { preset ->
+            tracker.arm(preset, nowMs = 0)
+            assertEquals(preset, tracker.armedMinutes)
+        }
     }
 
     @Test

@@ -12,4 +12,6 @@ dependencies {
     implementation(projects.core.download)
 
     implementation(libs.work.runtime)
+
+    testImplementation(libs.junit)
 }
