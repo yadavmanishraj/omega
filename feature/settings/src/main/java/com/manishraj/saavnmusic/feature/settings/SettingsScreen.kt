@@ -2,7 +2,7 @@ package com.manishraj.saavnmusic.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,11 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -35,10 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaChoiceGroup
+import com.manishraj.saavnmusic.ui.components.OmegaSegmentedContainer
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedList
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedListItem
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
@@ -56,20 +54,22 @@ private fun themeModeLabel(mode: String): String =
 
 /**
  * Settings (REDESIGN_SPEC §7 + M3 Expressive spec §5 — tertiary, the
- * subtlest dosing): Appearance / Playback / Downloads are segmented
- * groupings (filled segments, 2dp gaps, no dividers); the theme and
+ * subtlest dosing): every group is a section header over a segmented
+ * grouping (filled segments, 2dp gaps, no dividers — the kit's
+ * [OmegaSegmentedContainer], polish item 13); the theme and
  * quality pickers are connected button groups ([OmegaChoiceGroup] —
  * options that stop fitting overflow into the group's menu instead of
  * crushing their labels at large font scales, and wrap to chip rows
  * at very large scales so a selection is never hidden); the
- * dynamic-color switch carries the expressive handle check icon. API
+ * wallpaper-color switch carries the expressive handle check icon. API
  * endpoint (visible label + helper + URI keyboard + inline validation
- * + full-width save + success snackbar) and About keep their cards.
- * Everything persists immediately except the endpoint, which is
- * save-button based; datastore keys and update semantics unchanged.
- * Feedback rides the SHELL snackbar via LocalOmegaSnackbar (F-08) —
- * this screen used to mount a private stock host that rendered
- * mis-anchored, off the shell's channel entirely.
+ * + full-width save + success snackbar), Help and About sit in the
+ * same section + segment grammar. Everything persists immediately
+ * except the endpoint, which is save-button based; datastore keys and
+ * update semantics unchanged. Feedback rides the SHELL snackbar via
+ * LocalOmegaSnackbar (F-08) — this screen used to mount a private
+ * stock host that rendered mis-anchored, off the shell's channel
+ * entirely.
  */
 @Composable
 fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
@@ -100,7 +100,10 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
         // ---- Appearance ----
         SettingsSection(title = "Appearance") {
             OmegaSegmentedList {
-                SettingsSegment {
+                OmegaSegmentedContainer(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(OmegaSpacing.lg),
+                ) {
                     Text("Theme", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         // The current value is always readable as
@@ -124,8 +127,8 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
                     )
                 }
                 OmegaSegmentedListItem(
-                    headline = "Dynamic / artwork colors",
-                    supporting = "Tints surfaces from artwork colors",
+                    headline = "Wallpaper colors",
+                    supporting = "Surfaces follow your wallpaper's colors",
                     trailing = {
                         Switch(
                             checked = s.dynamicColor,
@@ -153,7 +156,10 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
         // ---- Playback ----
         SettingsSection(title = "Playback") {
             OmegaSegmentedList {
-                SettingsSegment {
+                OmegaSegmentedContainer(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(OmegaSpacing.lg),
+                ) {
                     Text("Playback quality", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "Current: ${s.streamQuality} · Higher quality uses more data.",
@@ -175,7 +181,10 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
         // ---- Downloads ----
         SettingsSection(title = "Downloads") {
             OmegaSegmentedList {
-                SettingsSegment {
+                OmegaSegmentedContainer(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(OmegaSpacing.lg),
+                ) {
                     Text("Download quality", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         // Verified against DownloadWorker: downloads run on
@@ -197,77 +206,123 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
         }
 
         // ---- API ----
-        SettingsCard(title = "API") {
-            // No inner "API endpoint" title (F-20): the card
-            // title + the field label already say it — the card
-            // used to repeat the phrase three times in 200dp.
-            OutlinedTextField(
-                value = endpoint,
-                onValueChange = {
-                    endpoint = it
-                    endpointError = null
-                },
-                label = { Text("API endpoint") },
-                placeholder = { Text("https://www.jiosaavn.com/api.php") },
-                singleLine = false,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                isError = endpointError != null,
-                supportingText = {
-                    val error = endpointError
-                    if (error != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                            Text(error, color = MaterialTheme.colorScheme.error)
-                        }
-                    } else {
-                        Text(
-                            "Default: https://www.jiosaavn.com/api.php — the app talks to JioSaavn directly. Restart the app after changing.",
-                        )
+        SettingsSection(title = "API") {
+            OmegaSegmentedList {
+                OmegaSegmentedContainer(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(OmegaSpacing.lg),
+                ) {
+                    // No inner "API endpoint" title (F-20): the section
+                    // header + the field label already say it — the
+                    // group used to repeat the phrase three times in
+                    // 200dp.
+                    OutlinedTextField(
+                        value = endpoint,
+                        onValueChange = {
+                            endpoint = it
+                            endpointError = null
+                        },
+                        label = { Text("API endpoint") },
+                        placeholder = { Text("https://www.jiosaavn.com/api.php") },
+                        singleLine = false,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        isError = endpointError != null,
+                        supportingText = {
+                            val error = endpointError
+                            if (error != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Outlined.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                    Text(error, color = MaterialTheme.colorScheme.error)
+                                }
+                            } else {
+                                Text(
+                                    "Default: https://www.jiosaavn.com/api.php. The app talks to JioSaavn directly. Restart the app after changing.",
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(OmegaSpacing.md))
+                    Button(
+                        onClick = {
+                            val value = endpoint.trim()
+                            endpointError =
+                                when {
+                                    value.isBlank() -> "Enter an endpoint URL."
+                                    !value.startsWith("http://") && !value.startsWith("https://") ->
+                                        "That doesn't look like a URL. It should start with https://"
+                                    else -> null
+                                }
+                            if (endpointError == null) {
+                                vm.update { it.copy(apiEndpoint = value) }
+                                snackbar?.showMessage("API endpoint saved. Restart the app to apply")
+                            }
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(OmegaSpacing.xxxl),
+                    ) {
+                        Text("Save API endpoint")
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(OmegaSpacing.md))
-            Button(
-                onClick = {
-                    val value = endpoint.trim()
-                    endpointError =
-                        when {
-                            value.isBlank() -> "Enter an endpoint URL."
-                            !value.startsWith("http://") && !value.startsWith("https://") ->
-                                "That doesn't look like a URL — it should start with https://"
-                            else -> null
-                        }
-                    if (endpointError == null) {
-                        vm.update { it.copy(apiEndpoint = value) }
-                        snackbar?.showMessage("API endpoint saved — restart the app to apply")
-                    }
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-            ) {
-                Text("Save API endpoint")
+                }
+            }
+        }
+
+        // ---- Help ----
+        SettingsSection(title = "Help") {
+            OmegaSegmentedList {
+                OmegaSegmentedContainer(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(OmegaSpacing.lg),
+                ) {
+                    Text("Where downloads live", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Downloads are saved on this device and play offline, no account needed. Library, then Downloads, shows their total size.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(OmegaSpacing.md))
+                    Text("Quality and data use", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Higher playback quality uses more data while streaming, and higher download quality saves bigger files. Playback and download quality are set separately.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(OmegaSpacing.md))
+                    Text("Sleep timer and queue", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Set the sleep timer in the player to pause playback after 15, 30 or 60 minutes. The player's queue button shows the full queue; tap a song to jump to it.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 
         // ---- About ----
-        SettingsCard(title = "About") {
-            Text(
-                "No login, no account, no tracking. Favorites, downloads, history and playlists live only on this device.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.height(OmegaSpacing.sm))
-            Text(
-                if (versionName != null) "Omega · version $versionName" else "Omega",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        SettingsSection(title = "About") {
+            OmegaSegmentedList {
+                OmegaSegmentedContainer(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(OmegaSpacing.lg),
+                ) {
+                    Text(
+                        "No login, no account, no tracking. Favorites, downloads, history and playlists live only on this device.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(OmegaSpacing.sm))
+                    Text(
+                        if (versionName != null) "Omega · version $versionName" else "Omega",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -286,46 +341,5 @@ private fun SettingsSection(
         )
         Spacer(Modifier.height(OmegaSpacing.md))
         content()
-    }
-}
-
-/**
- * One filled segment with free-form content (a label + a choice
- * group) — the same surfaceContainerHigh + large-shape treatment as
- * [OmegaSegmentedListItem], for segments the item's
- * headline/supporting/trailing slots can't express.
- */
-@Composable
-private fun SettingsSegment(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        // Full width like SettingsCard (F-23): without it the
-        // segment sized to its widest child, so Appearance / Playback
-        // / Downloads cards ended at different ragged right edges.
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Column(
-            Modifier.padding(OmegaSpacing.lg),
-            content = content,
-        )
-    }
-}
-
-@Composable
-private fun SettingsCard(
-    title: String,
-    content: @Composable () -> Unit,
-) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(OmegaSpacing.lg)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(OmegaSpacing.md))
-            content()
-        }
     }
 }
