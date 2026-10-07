@@ -19,4 +19,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Test-only: construct the real JioSaavnClient / SettingsRepository
+    // around in-memory fakes (the local-library tests never call them).
+    testImplementation(libs.okhttp)
+    testImplementation(libs.datastore)
 }
