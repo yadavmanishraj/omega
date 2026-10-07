@@ -8,8 +8,9 @@ import org.gradle.kotlin.dsl.configure
 
 /**
  * omega.android.application — base Android application configuration:
- * compileSdk 37 (required by Compose 1.12 / BOM 2026.09.00), targetSdk 35,
- * minSdk 26, JVM 17.
+ * compileSdk 37 (required by Compose 1.12 / BOM 2026.09.00), targetSdk 37
+ * (Manish's call, 2026-10-07 — ahead of Play's API 36 floor), minSdk 26,
+ * JVM 17.
  */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -22,7 +23,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
 
                 defaultConfig {
                     minSdk = 26
-                    targetSdk = 35
+                    targetSdk = 37
                     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
                 }
 
