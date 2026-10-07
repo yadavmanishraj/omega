@@ -293,7 +293,7 @@ fun HomeScreen(
                         EmptyState(
                             title = "Nothing downloaded yet",
                             subtitle = "When you're back online, download songs to listen offline.",
-                            actionLabel = "Go to Library",
+                            actionLabel = "Go to Downloads",
                             onAction = onOpenDownloads,
                         )
                     }

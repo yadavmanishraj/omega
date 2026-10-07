@@ -7,6 +7,7 @@ import androidx.work.WorkManager
 import com.manishraj.saavnmusic.data.repository.MusicRepository
 import com.manishraj.saavnmusic.data.repository.RemovedPlaylistSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
+import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.playback.InsertNextResult
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -126,6 +128,15 @@ class LibraryViewModel
         }
 
         fun playlistSongs(id: Long): Flow<List<Song>> = repo.playlistSongs(id)
+
+        /**
+         * One local playlist by id — the data source for the
+         * `library/playlist/{id}` NavHost destination (A17 F-01).
+         * Emits null when no playlist matches (unknown id, or the
+         * playlist was deleted); callers distinguish "not loaded
+         * yet" from "gone" by whether the flow has emitted at all.
+         */
+        fun playlist(id: Long): Flow<LocalPlaylist?> = repo.localPlaylists.map { list -> list.firstOrNull { it.id == id } }
 
         fun addToPlaylist(
             pid: Long,

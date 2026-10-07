@@ -23,6 +23,12 @@ data class AppSettings(
     val dynamicColor: Boolean = false,
     /** Theme selection: "SYSTEM", "DARK" or "LIGHT" (redesign spec §7). */
     val themeMode: String = "DARK",
+    /**
+     * POST_NOTIFICATIONS has been requested once (A17 audit §6a):
+     * the shell asks contextually at the first download enqueue and
+     * never again — a denial is silent and permanent by design.
+     */
+    val notificationPermissionAsked: Boolean = false,
 )
 
 /**
@@ -42,6 +48,7 @@ class SettingsRepository(
         val DARK = booleanPreferencesKey("dark")
         val DYN = booleanPreferencesKey("dynamic")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val NPA = booleanPreferencesKey("notif_perm_asked")
     }
 
     private fun Preferences.toAppSettings(): AppSettings {
@@ -61,6 +68,7 @@ class SettingsRepository(
             darkTheme = this[K.DARK] ?: true,
             dynamicColor = this[K.DYN] ?: false,
             themeMode = this[K.THEME_MODE] ?: if (this[K.DARK] == false) "LIGHT" else "DARK",
+            notificationPermissionAsked = this[K.NPA] ?: false,
         )
     }
 
@@ -75,6 +83,7 @@ class SettingsRepository(
             prefs[K.DARK] = next.darkTheme
             prefs[K.DYN] = next.dynamicColor
             prefs[K.THEME_MODE] = next.themeMode
+            prefs[K.NPA] = next.notificationPermissionAsked
         }
     }
 }
