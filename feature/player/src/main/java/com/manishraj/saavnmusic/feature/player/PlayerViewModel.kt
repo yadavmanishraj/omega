@@ -23,6 +23,21 @@ class PlayerViewModel
         private val repo: MusicRepository,
     ) : ViewModel() {
         val state = player.state
+
+        /**
+         * Error-presentation arbitration shared by the mini-player
+         * and the full player (both surfaces resolve THIS activity-
+         * scoped VM): exactly one surface announces each playback
+         * failure — see [ErrorChannelArbiter].
+         */
+        private val errorArbiter = ErrorChannelArbiter()
+
+        /** The full player is presenting error [seq] via its inline row. */
+        fun markErrorPresented(seq: Int) = errorArbiter.markPresented(seq)
+
+        /** Claims error [seq] for the mini-player's snackbar; true iff this surface won. */
+        fun claimErrorForSnackbar(seq: Int): Boolean = errorArbiter.claimForSnackbar(seq)
+
         val appSettings: StateFlow<AppSettings> =
             repo.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 

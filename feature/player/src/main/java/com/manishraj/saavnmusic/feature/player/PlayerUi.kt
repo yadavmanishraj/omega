@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -38,6 +39,9 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -91,18 +95,20 @@ import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.playback.PlayerState
 import com.manishraj.saavnmusic.playback.RepeatMode
+import com.manishraj.saavnmusic.playback.SLEEP_TIMER_PRESETS
 import com.manishraj.saavnmusic.playback.repeatModeFromEngine
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
-import com.manishraj.saavnmusic.ui.components.OmegaChoiceGroup
 import com.manishraj.saavnmusic.ui.components.OmegaFavoriteIcon
 import com.manishraj.saavnmusic.ui.components.OmegaPlayPauseIcon
 import com.manishraj.saavnmusic.ui.components.animatePaletteColor
 import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
 import com.manishraj.saavnmusic.ui.components.safeGradientEnd
+import com.manishraj.saavnmusic.ui.theme.OmegaMotion
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -111,6 +117,21 @@ import kotlinx.coroutines.launch
  * song, so a track change never morphs between two different artworks.
  */
 private fun artworkSharedElementKey(songId: String): String = "artwork-$songId"
+
+/**
+ * How long the mini-player waits before claiming a playback error
+ * for its snackbar: one beat past the shell's mini-player exit
+ * animation ([OmegaMotion.EXIT_MS]), so expanding the player hands
+ * the error to the full player's inline row instead of racing it.
+ * See [ErrorChannelArbiter].
+ */
+private const val ERROR_SNACKBAR_SETTLE_MS: Long = OmegaMotion.EXIT_MS + 100L
+
+/** Playback-speed choices — the set the old permanent chip row offered. */
+private val SPEED_OPTIONS: List<Float> = listOf(0.75f, 1f, 1.25f, 1.5f)
+
+/** The speed label format the old chip row used: "0.75x", "1.0x", "1.25x", "1.5x". */
+private fun speedLabel(v: Float): String = "${v}x"
 
 /**
  * Transport toggle shape morph (M3 Expressive spec §1.8 / §5): round
@@ -185,6 +206,22 @@ fun MiniPlayer(
     artworkBoundsTransform: BoundsTransform,
 ) {
     val st by vm.state.collectAsState()
+    // Playback-error channel for the collapsed context (Task 4):
+    // while only this surface is composed there is no inline error
+    // row, so the snackbar is the one announcement — claimed via
+    // the ViewModel's arbiter after a short settle, so an in-flight
+    // expansion lets the full player present the error inline
+    // instead (see ErrorChannelArbiter). Copy unchanged.
+    val snackbar = LocalOmegaSnackbar.current
+    LaunchedEffect(st.errorSeq) {
+        val seq = st.errorSeq
+        if (seq > 0) {
+            delay(ERROR_SNACKBAR_SETTLE_MS)
+            if (vm.claimErrorForSnackbar(seq)) {
+                snackbar?.showMessage("Couldn't play — check your connection")
+            }
+        }
+    }
     val cur = st.current ?: return
     // Artwork tint (UIUX_DESIGN §3.1.3): the container takes the
     // artwork's darkened color, crossfading on the shared palette
@@ -383,14 +420,15 @@ fun FullPlayer(
     }
     val fav by vm.isFavorite(cur.id).collectAsState(false)
     val downloaded by vm.isDownloaded(cur.id).collectAsState(false)
-    // Playback failures surface here (and once per failure as a
-    // snackbar): the silent 0:00 player on an offline tap was a
-    // phone-QA minor; the controller now reports the error honestly.
-    val snackbar = LocalOmegaSnackbar.current
+    // Playback failures surface HERE as the inline error row (see
+    // PlayerControls) — the ONE channel while this surface is
+    // composed (Task 4). Claim each failure as presented so the
+    // mini-player's snackbar can never repeat it: not while the
+    // player is open (the old double announcement), not after a
+    // collapse. The claim also runs on first composition over an
+    // outstanding error, which the inline row is already showing.
     LaunchedEffect(st.errorSeq) {
-        if (st.errorSeq > 0) {
-            snackbar?.showMessage("Couldn't play — check your connection")
-        }
+        vm.markErrorPresented(st.errorSeq)
     }
     // Artwork gradient (UIUX_DESIGN §3.1.3): mutedDark at the top
     // crossfading on the shared palette helper (spec §4.4) on track
@@ -646,10 +684,34 @@ private fun PlayerTopBar(
 }
 
 /**
+ * One option in a player preset menu (sleep / speed); the current
+ * value carries a check so state reads beyond color — the same
+ * pattern as Library's sort menu.
+ */
+@Composable
+private fun PlayerMenuItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(label, maxLines = 1, softWrap = false) },
+        leadingIcon =
+            if (selected) {
+                { Icon(Icons.Filled.Check, contentDescription = null) }
+            } else {
+                null
+            },
+        onClick = onClick,
+    )
+}
+
+/**
  * The full player's controls cluster: title/artist, the error row,
  * the expressive seek bar + time row, the transport row, the
  * de-emphasized secondary cluster (favorite / download / lyrics /
- * sleep), the speed choice group, and the inline lyrics block.
+ * sleep / speed — sleep and speed open preset menus instead of
+ * spending permanent chrome), and the inline lyrics block.
  * Extracted verbatim from the portrait column (Wave 3) so the
  * landscape split's controls pane renders the SAME controls driven
  * by the SAME state — no behavior lives here that the portrait path
@@ -860,49 +922,120 @@ private fun PlayerControls(
         // PlayerState (F-05) — the controller's armed preset and
         // remaining time — so the control survives collapse/reopen
         // and agrees with the timer that will actually fire.
-        if (st.sleepMinutes > 0) {
-            FilledTonalButton(
-                onClick = { vm.player.cycleSleepTimer() },
-                contentPadding =
-                    PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterVertically)
-                        .height(36.dp)
-                        .semantics {
-                            stateDescription = "Sleep timer, ${st.sleepMinutes} minutes"
+        // Tapping either form opens the preset MENU (Task 4): the
+        // choices are finally visible and selection is direct —
+        // the old tap silently CYCLED presets, so exploring the
+        // control changed the commitment instead of revealing it.
+        var sleepMenuOpen by remember { mutableStateOf(false) }
+        Box(Modifier.align(Alignment.CenterVertically)) {
+            if (st.sleepMinutes > 0) {
+                FilledTonalButton(
+                    onClick = { sleepMenuOpen = true },
+                    contentPadding =
+                        PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
+                    modifier =
+                        Modifier
+                            .height(36.dp)
+                            .semantics {
+                                stateDescription =
+                                    "Sleep timer, ${formatDuration(st.sleepRemainingMs / 1000)} left"
+                            },
+                ) {
+                    Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer", modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(OmegaSpacing.xs))
+                    Text(
+                        "${formatDuration(st.sleepRemainingMs / 1000)} left",
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = { sleepMenuOpen = true },
+                    modifier =
+                        Modifier.semantics {
+                            stateDescription = "Sleep timer off"
                         },
-            ) {
-                Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer", modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(OmegaSpacing.xs))
-                Text(
-                    "${formatDuration(st.sleepRemainingMs / 1000)} left",
-                    maxLines = 1,
-                    softWrap = false,
-                )
+                ) {
+                    Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
+                }
             }
-        } else {
-            IconButton(
-                onClick = { vm.player.cycleSleepTimer() },
-                modifier =
-                    Modifier.semantics {
-                        stateDescription = "Sleep timer off"
-                    },
+            DropdownMenu(
+                expanded = sleepMenuOpen,
+                onDismissRequest = { sleepMenuOpen = false },
             ) {
-                Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
+                PlayerMenuItem(
+                    label = "Off",
+                    selected = st.sleepMinutes == 0,
+                    onClick = {
+                        vm.player.setSleepTimer(0)
+                        sleepMenuOpen = false
+                    },
+                )
+                SLEEP_TIMER_PRESETS.forEach { minutes ->
+                    PlayerMenuItem(
+                        label = "$minutes minutes",
+                        selected = st.sleepMinutes == minutes,
+                        onClick = {
+                            vm.player.setSleepTimer(minutes)
+                            sleepMenuOpen = false
+                        },
+                    )
+                }
+            }
+        }
+        // Playback speed, same disclosure pattern as sleep (Task 4):
+        // the permanent 4-chip row is gone. At 1.0x this is a plain
+        // icon in the secondary cluster; off 1.0x it becomes a tonal
+        // chip carrying the current value, so the state is visible
+        // without opening anything. Either form opens the choice
+        // menu; the state description always announces the speed.
+        var speedMenuOpen by remember { mutableStateOf(false) }
+        Box(Modifier.align(Alignment.CenterVertically)) {
+            if (st.speed == 1f) {
+                IconButton(
+                    onClick = { speedMenuOpen = true },
+                    modifier =
+                        Modifier.semantics {
+                            stateDescription = "Playback speed, ${speedLabel(st.speed)}"
+                        },
+                ) {
+                    Icon(Icons.Filled.Speed, contentDescription = "Playback speed")
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = { speedMenuOpen = true },
+                    contentPadding =
+                        PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
+                    modifier =
+                        Modifier
+                            .height(36.dp)
+                            .semantics {
+                                stateDescription = "Playback speed, ${speedLabel(st.speed)}"
+                            },
+                ) {
+                    Icon(Icons.Filled.Speed, contentDescription = "Playback speed", modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(OmegaSpacing.xs))
+                    Text(speedLabel(st.speed), maxLines = 1, softWrap = false)
+                }
+            }
+            DropdownMenu(
+                expanded = speedMenuOpen,
+                onDismissRequest = { speedMenuOpen = false },
+            ) {
+                SPEED_OPTIONS.forEach { v ->
+                    PlayerMenuItem(
+                        label = speedLabel(v),
+                        selected = st.speed == v,
+                        onClick = {
+                            vm.player.setSpeed(v)
+                            speedMenuOpen = false
+                        },
+                    )
+                }
             }
         }
     }
-    Text("Speed", style = MaterialTheme.typography.bodySmall)
-    // Connected choice group (spec §3): replaces the FilterChip
-    // row; options that cannot fit overflow into the group's
-    // menu instead of crushing at large font scales.
-    OmegaChoiceGroup(
-        options = listOf(0.75f, 1f, 1.25f, 1.5f),
-        selected = st.speed,
-        onSelect = { vm.player.setSpeed(it) },
-        label = { v -> "${v}x" },
-    )
     if (showLyrics) {
         Spacer(Modifier.height(OmegaSpacing.md))
         Text(
