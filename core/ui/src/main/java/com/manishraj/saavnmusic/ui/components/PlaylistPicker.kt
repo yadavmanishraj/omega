@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -81,7 +81,7 @@ fun SongOverflowMenuButton(
         if (onPlayNext != null) {
             DropdownMenuItem(
                 text = { Text("Play next", maxLines = 1, softWrap = false) },
-                leadingIcon = { Icon(Icons.Filled.PlaylistPlay, contentDescription = null) },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null) },
                 onClick = {
                     expanded = false
                     onPlayNext()
@@ -90,7 +90,7 @@ fun SongOverflowMenuButton(
         }
         DropdownMenuItem(
             text = { Text("Add to playlist", maxLines = 1, softWrap = false) },
-            leadingIcon = { Icon(Icons.Filled.PlaylistAdd, contentDescription = null) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
             onClick = {
                 expanded = false
                 onAddToPlaylist()
@@ -186,7 +186,7 @@ fun PlaylistPickerDialog(
                                     )
                                 },
                                 leadingContent = {
-                                    Icon(Icons.Filled.PlaylistPlay, contentDescription = null)
+                                    Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null)
                                 },
                                 modifier = Modifier.clickable { onPick(playlist) },
                             )

@@ -117,7 +117,8 @@ suspend fun loadArtworkPalette(
  * Compose state holder: returns the cached palette immediately when
  * present, [fallback] while extraction runs (or for a null URL), and
  * recomposes with the extracted colors when they land. Callers animate
- * the change (spec: 300 ms crossfade, no hard cuts).
+ * the change through the shared [animatePaletteColor] helper (spec
+ * §4.4: the theme's effects spec, no hard cuts).
  */
 @Composable
 fun rememberArtworkPalette(
