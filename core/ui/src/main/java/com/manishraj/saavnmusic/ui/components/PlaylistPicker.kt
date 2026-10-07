@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlaylistRemove
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -45,14 +46,15 @@ import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
  * screen provides:
  *
  * - Play next ([onPlayNext], only when the screen can queue) —
- *   no call site provides it yet: the playback engine has no
- *   insert-next operation, and spec §10 forbids engine changes in
- *   this program. The slot exists so the day the engine grows one,
- *   every row gains it by passing one more callback.
+ *   wired since Wave 2.5: every feature row passes it through its
+ *   ViewModel to PlayerController.insertNext.
  * - Add to playlist ([onAddToPlaylist], always).
  * - Download ([onDownload]).
  * - Favorite / Remove from favorites ([onToggleFavorite], label and
  *   icon driven by [isFavorite]).
+ * - Remove from playlist ([onRemoveFromPlaylist]) — the ONE
+ *   contextual item: only LocalPlaylistDetail rows pass it, since
+ *   membership removal is meaningless anywhere else.
  *
  * Menu content parity is the D6 fix: Detail rows used to offer ONLY
  * "Add to playlist" while the player could download and favorite —
@@ -68,6 +70,7 @@ fun SongOverflowMenuButton(
     onPlayNext: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     onToggleFavorite: (() -> Unit)? = null,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
     onAddToPlaylist: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -127,6 +130,16 @@ fun SongOverflowMenuButton(
                 },
             )
         }
+        if (onRemoveFromPlaylist != null) {
+            DropdownMenuItem(
+                text = { Text("Remove from playlist", maxLines = 1, softWrap = false) },
+                leadingIcon = { Icon(Icons.Filled.PlaylistRemove, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onRemoveFromPlaylist()
+                },
+            )
+        }
     }
 }
 
@@ -172,13 +185,6 @@ fun PlaylistPickerDialog(
                     LazyColumn(Modifier.heightIn(max = 320.dp)) {
                         items(playlists) { playlist ->
                             ListItem(
-                                headlineContent = {
-                                    Text(
-                                        playlist.name,
-                                        maxLines = 1,
-                                        style = MaterialTheme.typography.titleMedium,
-                                    )
-                                },
                                 supportingContent = {
                                     Text(
                                         "${playlist.songCount} songs",
@@ -189,7 +195,13 @@ fun PlaylistPickerDialog(
                                     Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null)
                                 },
                                 modifier = Modifier.clickable { onPick(playlist) },
-                            )
+                            ) {
+                                Text(
+                                    playlist.name,
+                                    maxLines = 1,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
                         }
                     }
                     TextButton(onClick = { creating = true }) {

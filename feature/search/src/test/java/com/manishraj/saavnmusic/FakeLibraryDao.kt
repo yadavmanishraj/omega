@@ -138,6 +138,19 @@ class FakeLibraryDao : LibraryDao {
             } + e
     }
 
+    override suspend fun playlistSong(
+        pid: Long,
+        sid: String,
+    ): LocalPlaylistSongEntity? = playlistSongsState.value.firstOrNull { it.playlistId == pid && it.songId == sid }
+
+    override suspend fun removeFromPlaylist(
+        pid: Long,
+        sid: String,
+    ) {
+        playlistSongsState.value =
+            playlistSongsState.value.filterNot { it.playlistId == pid && it.songId == sid }
+    }
+
     override suspend fun playlistSongCount(id: Long): Int = playlistSongsState.value.count { it.playlistId == id }
 
     override fun playlistSongs(id: Long): Flow<List<LocalPlaylistSongEntity>> =

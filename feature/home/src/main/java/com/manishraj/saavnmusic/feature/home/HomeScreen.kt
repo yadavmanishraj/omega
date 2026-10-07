@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
+import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
@@ -54,6 +55,21 @@ import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 import java.util.Calendar
+
+/**
+ * Play-next snackbar copy (spec §3/§7): with a live queue the song
+ * is inserted after the current track ("Will play next"), but with
+ * nothing playing the engine APPENDS it without starting playback —
+ * the copy must not promise "next" in that case.
+ */
+private fun playNextMessage(
+    result: InsertNextResult,
+    title: String,
+): String =
+    when (result) {
+        InsertNextResult.INSERTED_NEXT -> "Will play next: $title"
+        InsertNextResult.APPENDED -> "Added to queue: $title"
+    }
 
 private fun greetingForHour(hour: Int): String =
     when (hour) {
@@ -255,6 +271,11 @@ fun HomeScreen(
                                     SongOverflowMenuButton(
                                         song = song,
                                         isFavorite = true,
+                                        onPlayNext = {
+                                            snackbar?.showMessage(
+                                                playNextMessage(vm.playNext(song), song.name),
+                                            )
+                                        },
                                         onDownload = {
                                             vm.download(song)
                                             snackbar?.showMessage("Download queued")
@@ -314,6 +335,11 @@ fun HomeScreen(
                                                 SongOverflowMenuButton(
                                                     song = song,
                                                     isFavorite = songIsFavorite,
+                                                    onPlayNext = {
+                                                        snackbar?.showMessage(
+                                                            playNextMessage(vm.playNext(song), song.name),
+                                                        )
+                                                    },
                                                     onDownload = {
                                                         vm.download(song)
                                                         snackbar?.showMessage("Download queued")

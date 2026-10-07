@@ -3,10 +3,12 @@ package com.manishraj.saavnmusic
 import android.content.ContextWrapper
 import com.manishraj.saavnmusic.data.remote.JioSaavnClient
 import com.manishraj.saavnmusic.data.repository.MusicRepository
+import com.manishraj.saavnmusic.data.repository.RemovedPlaylistSong
 import com.manishraj.saavnmusic.data.settings.SettingsRepository
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.feature.library.LibraryViewModel
 import com.manishraj.saavnmusic.feature.library.SortMode
+import com.manishraj.saavnmusic.playback.PlayerController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,7 +64,7 @@ class LibraryViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): LibraryViewModel = LibraryViewModel(repo, UnusedContext())
+    private fun viewModel(): LibraryViewModel = LibraryViewModel(repo, PlayerController(UnusedContext()), UnusedContext())
 
     private fun song(id: String): Song =
         Song(
@@ -155,6 +157,27 @@ class LibraryViewModelTest {
             assertEquals(1, playlists[0].songCount)
             val songs = repo.playlistSongs(playlists[0].id).first()
             assertEquals(listOf("p1"), songs.map { it.id })
+        }
+
+    @Test
+    fun removeFromPlaylistDelegatesAndRestoreUndoesAtOriginalPosition() =
+        runTest(dispatcher) {
+            val vm = viewModel()
+            val playlistId = repo.createPlaylist("Mix")
+            repo.addToPlaylist(playlistId, song("a"))
+            repo.addToPlaylist(playlistId, song("b"))
+            repo.addToPlaylist(playlistId, song("c"))
+
+            var removed: RemovedPlaylistSong? = null
+            vm.removeFromPlaylist(playlistId, song("b")) { removed = it }
+            advanceUntilIdle()
+            assertEquals(listOf("a", "c"), repo.playlistSongs(playlistId).first().map { it.id })
+            assertEquals(1, removed?.position)
+            assertEquals("b", removed?.song?.id)
+
+            vm.restoreToPlaylist(removed!!)
+            advanceUntilIdle()
+            assertEquals(listOf("a", "b", "c"), repo.playlistSongs(playlistId).first().map { it.id })
         }
 
     @Test

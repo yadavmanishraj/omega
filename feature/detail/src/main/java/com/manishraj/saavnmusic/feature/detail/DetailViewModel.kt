@@ -12,6 +12,8 @@ import com.manishraj.saavnmusic.domain.Playlist
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.download.DownloadWorker
+import com.manishraj.saavnmusic.playback.InsertNextResult
+import com.manishraj.saavnmusic.playback.PlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ class DetailViewModel
     @Inject
     constructor(
         private val repo: MusicRepository,
+        private val player: PlayerController,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         val album = MutableStateFlow<UiState<Album>>(UiState.Loading)
@@ -53,6 +56,14 @@ class DetailViewModel
         ) {
             viewModelScope.launch { repo.toggleFavorite(song, isFavorite) }
         }
+
+        /**
+         * Row-menu Play next (menu parity, spec §3): the shared
+         * [PlayerController]'s engine op. Synchronous — the caller
+         * picks the snackbar copy from the result (inserted after
+         * the current track vs appended to an idle queue).
+         */
+        fun playNext(song: Song): InsertNextResult = player.insertNext(song)
 
         /**
          * Row-menu Download (the D6 parity fix): the same path the

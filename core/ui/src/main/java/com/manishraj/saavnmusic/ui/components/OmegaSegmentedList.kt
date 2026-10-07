@@ -54,14 +54,6 @@ fun OmegaSegmentedListItem(
 ) {
     val scheme = MaterialTheme.colorScheme
     ListItem(
-        headlineContent = {
-            Text(
-                headline,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleMedium,
-            )
-        },
         supportingContent =
             supporting?.let {
                 {
@@ -94,5 +86,12 @@ fun OmegaSegmentedListItem(
                         Modifier
                     },
                 ),
-    )
+    ) {
+        Text(
+            headline,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
 }

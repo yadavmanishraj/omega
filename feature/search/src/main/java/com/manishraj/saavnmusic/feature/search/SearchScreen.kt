@@ -32,7 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
+import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.CircularArtwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
@@ -279,6 +280,11 @@ fun SearchScreen(
                                                 SongOverflowMenuButton(
                                                     song = item,
                                                     isFavorite = itemIsFavorite,
+                                                    onPlayNext = {
+                                                        snackbar?.showMessage(
+                                                            playNextMessage(vm.playNext(item), item.name),
+                                                        )
+                                                    },
                                                     onDownload = {
                                                         vm.download(item)
                                                         snackbar?.showMessage("Download queued")
@@ -305,6 +311,11 @@ fun SearchScreen(
                                             SongOverflowMenuButton(
                                                 song = song,
                                                 isFavorite = songIsFavorite,
+                                                onPlayNext = {
+                                                    snackbar?.showMessage(
+                                                        playNextMessage(vm.playNext(song), song.name),
+                                                    )
+                                                },
                                                 onDownload = {
                                                     vm.download(song)
                                                     snackbar?.showMessage("Download queued")
@@ -363,10 +374,11 @@ fun SearchScreen(
                         LazyColumn {
                             items(artists) { a ->
                                 ListItem(
-                                    headlineContent = { Text(a.name, style = MaterialTheme.typography.titleMedium) },
                                     leadingContent = { CircularArtwork(a.imageUrl, contentDescription = a.name) },
                                     modifier = Modifier.clickable { onArtist(a.id) },
-                                )
+                                ) {
+                                    Text(a.name, style = MaterialTheme.typography.titleMedium)
+                                }
                             }
                         }
                 }
@@ -417,6 +429,21 @@ fun SearchScreen(
     }
 }
 
+/**
+ * Play-next snackbar copy (spec §3/§7): with a live queue the song
+ * is inserted after the current track ("Will play next"), but with
+ * nothing playing the engine APPENDS it without starting playback —
+ * the copy must not promise "next" in that case.
+ */
+private fun playNextMessage(
+    result: InsertNextResult,
+    title: String,
+): String =
+    when (result) {
+        InsertNextResult.INSERTED_NEXT -> "Will play next: $title"
+        InsertNextResult.APPENDED -> "Added to queue: $title"
+    }
+
 /** Initial results load (spec §5): the expressive morph, centered —
  * search loads are short, undifferentiated waits, unlike the
  * content-shaped skeleton loads on Home/Detail. */
@@ -437,7 +464,7 @@ private fun SearchTabs(
     onSelect: (Int) -> Unit,
 ) {
     val labels = listOf("Songs", "Albums", "Artists", "Playlists")
-    ScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
+    PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
         labels.forEachIndexed { i, label ->
             Tab(
                 selected = tab == i,

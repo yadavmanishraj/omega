@@ -361,6 +361,43 @@ class MusicRepository
             ),
         )
 
+        /**
+         * Removes [s] from local playlist [pid] and returns the
+         * removed membership (song snapshot + its stored position),
+         * or null when the song was not in the playlist. Membership
+         * is unique — the (playlistId, songId) primary key plus
+         * REPLACE inserts mean a song occurs at most once per
+         * playlist — so this deletes exactly that one row; every
+         * other row keeps its position.
+         */
+        suspend fun removeFromPlaylist(
+            pid: Long,
+            s: Song,
+        ): RemovedPlaylistSong? {
+            val row = dao.playlistSong(pid, s.id) ?: return null
+            dao.removeFromPlaylist(pid, s.id)
+            return RemovedPlaylistSong(pid, row.toSong(), row.position)
+        }
+
+        /**
+         * Undo for [removeFromPlaylist]: re-inserts the membership
+         * at its ORIGINAL position, restoring the playlist's exact
+         * pre-removal order (positions are stored, not derived).
+         */
+        suspend fun restoreToPlaylist(removed: RemovedPlaylistSong) {
+            dao.addToPlaylist(
+                LocalPlaylistSongEntity(
+                    removed.playlistId,
+                    removed.song.id,
+                    removed.song.name,
+                    removed.song.artist,
+                    removed.song.imageUrl,
+                    removed.song.streamUrl,
+                    removed.position,
+                ),
+            )
+        }
+
         suspend fun registerDownload(
             s: Song,
             path: String,
@@ -452,6 +489,18 @@ class MusicRepository
             const val HOME_CACHE_TTL_MS = 5 * 60 * 1000L
         }
     }
+
+/**
+ * A playlist membership removed by
+ * [MusicRepository.removeFromPlaylist], kept whole so the caller can
+ * hand it back to [MusicRepository.restoreToPlaylist] (the snackbar
+ * Undo) and land the song at its exact original [position].
+ */
+data class RemovedPlaylistSong(
+    val playlistId: Long,
+    val song: Song,
+    val position: Int,
+)
 
 // Entity -> domain mappers. Snapshots stored in Room carry a single
 // stream URL (no quality ladder); playback falls back to it.

@@ -7,6 +7,7 @@ import com.manishraj.saavnmusic.data.repository.MusicRepository
 import com.manishraj.saavnmusic.data.settings.SettingsRepository
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.feature.search.SearchViewModel
+import com.manishraj.saavnmusic.playback.PlayerController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -107,7 +108,7 @@ class SearchViewModelTest {
 
     private fun viewModel(): SearchViewModel {
         val context = NullServiceContext()
-        return SearchViewModel(repo, ConnectivityObserver(context), context)
+        return SearchViewModel(repo, PlayerController(context), ConnectivityObserver(context), context)
     }
 
     private suspend fun awaitCondition(

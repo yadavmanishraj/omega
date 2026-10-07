@@ -36,8 +36,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -62,6 +62,7 @@ import com.manishraj.saavnmusic.data.repository.toSong
 import com.manishraj.saavnmusic.domain.DownloadInfo
 import com.manishraj.saavnmusic.domain.LocalPlaylist
 import com.manishraj.saavnmusic.domain.Song
+import com.manishraj.saavnmusic.playback.InsertNextResult
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
@@ -82,6 +83,21 @@ private fun formatBytes(bytes: Long): String =
         bytes <= 0 -> "0 MB"
         bytes >= 1024L * 1024 * 1024 -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
         else -> String.format("%.0f MB", bytes / (1024.0 * 1024))
+    }
+
+/**
+ * Play-next snackbar copy (spec §3/§7): with a live queue the song
+ * is inserted after the current track ("Will play next"), but with
+ * nothing playing the engine APPENDS it without starting playback —
+ * the copy must not promise "next" in that case.
+ */
+private fun playNextMessage(
+    result: InsertNextResult,
+    title: String,
+): String =
+    when (result) {
+        InsertNextResult.INSERTED_NEXT -> "Will play next: $title"
+        InsertNextResult.APPENDED -> "Added to queue: $title"
     }
 
 /** User-facing download status (spec §7: COMPLETED reads "Downloaded"; the stored enum is unchanged). */
@@ -339,6 +355,11 @@ fun LibraryScreen(
                                                 SongOverflowMenuButton(
                                                     song = song,
                                                     isFavorite = true,
+                                                    onPlayNext = {
+                                                        snackbar?.showMessage(
+                                                            playNextMessage(vm.playNext(song), song.name),
+                                                        )
+                                                    },
                                                     onDownload = { vm.download(song) },
                                                     onToggleFavorite = { unfavoriteWithUndo(song) },
                                                     onAddToPlaylist = { playlistTarget = song },
@@ -398,9 +419,6 @@ fun LibraryScreen(
                                                 } else {
                                                     Modifier
                                                 },
-                                            headlineContent = {
-                                                Text(d.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
-                                            },
                                             supportingContent = {
                                                 Column {
                                                     // ONE protected line (Phase B): quality +
@@ -470,7 +488,9 @@ fun LibraryScreen(
                                             },
                                             colors =
                                                 ListItemDefaults.colors(containerColor = Color.Transparent),
-                                        )
+                                        ) {
+                                            Text(d.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
+                                        }
                                     }
                                 }
                             }
@@ -499,6 +519,11 @@ fun LibraryScreen(
                                             SongOverflowMenuButton(
                                                 song = song,
                                                 isFavorite = favs.any { it.id == song.id },
+                                                onPlayNext = {
+                                                    snackbar?.showMessage(
+                                                        playNextMessage(vm.playNext(song), song.name),
+                                                    )
+                                                },
                                                 onDownload = { vm.download(song) },
                                                 onToggleFavorite = {
                                                     vm.toggleFavorite(
@@ -712,7 +737,7 @@ private fun LibraryTabs(
     // counts) into truncation well below fontScale 1.6 — at the
     // common LARGE setting (~1.3) "Downloads" already became
     // "Downlo…". Scrollable tabs size to content and never compress.
-    ScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
+    PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = OmegaSpacing.lg) {
         labels.forEachIndexed { i, label ->
             Tab(
                 selected = tab == i,
@@ -739,6 +764,7 @@ private fun LocalPlaylistDetail(
         vm.playlistSongs(playlist.id).collect { value = it }
     }
     val favs by vm.favorites.collectAsState()
+    val snackbar = LocalOmegaSnackbar.current
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -773,8 +799,22 @@ private fun LocalPlaylistDetail(
                                 SongOverflowMenuButton(
                                     song = song,
                                     isFavorite = songIsFavorite,
+                                    onPlayNext = {
+                                        snackbar?.showMessage(
+                                            playNextMessage(vm.playNext(song), song.name),
+                                        )
+                                    },
                                     onDownload = { vm.download(song) },
                                     onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                    onRemoveFromPlaylist = {
+                                        vm.removeFromPlaylist(playlist.id, song) { removed ->
+                                            snackbar?.showMessage(
+                                                "Removed from ${playlist.name}",
+                                                actionLabel = "Undo",
+                                                onAction = { vm.restoreToPlaylist(removed) },
+                                            )
+                                        }
+                                    },
                                     onAddToPlaylist = { playlistTarget = song },
                                 )
                             },
