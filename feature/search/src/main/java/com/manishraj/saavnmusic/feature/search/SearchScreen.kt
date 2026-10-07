@@ -86,6 +86,7 @@ fun SearchScreen(
     val tab by vm.tab.collectAsState()
     val searchedQuery by vm.searchedQuery.collectAsState()
     val localPlaylists by vm.userPlaylists.collectAsState()
+    val favorites by vm.favorites.collectAsState()
     val online by vm.online.collectAsState()
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
     val isIdle = searchedQuery.isBlank()
@@ -230,22 +231,36 @@ fun SearchScreen(
                             if (topResults.isNotEmpty()) {
                                 item { SectionHeader("Top results") }
                                 items(topResults.take(3)) { item ->
+                                    val itemIsFavorite = favorites.any { it.id == item.id }
                                     SongRow(
                                         item,
                                         { vm.resolveAndPlay(item, onPlayQueue) },
                                         trailing = {
-                                            SongOverflowMenuButton(item) { playlistTarget = item }
+                                            SongOverflowMenuButton(
+                                                song = item,
+                                                isFavorite = itemIsFavorite,
+                                                onDownload = { vm.download(item) },
+                                                onToggleFavorite = { vm.toggleFavorite(item, itemIsFavorite) },
+                                                onAddToPlaylist = { playlistTarget = item },
+                                            )
                                         },
                                     )
                                 }
                                 item { SectionHeader("Songs") }
                             }
                             items(s.data) { song ->
+                                val songIsFavorite = favorites.any { it.id == song.id }
                                 SongRow(
                                     song,
                                     { onPlayQueue(s.data, s.data.indexOf(song)) },
                                     trailing = {
-                                        SongOverflowMenuButton(song) { playlistTarget = song }
+                                        SongOverflowMenuButton(
+                                            song = song,
+                                            isFavorite = songIsFavorite,
+                                            onDownload = { vm.download(song) },
+                                            onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                            onAddToPlaylist = { playlistTarget = song },
+                                        )
                                     },
                                 )
                             }
@@ -308,7 +323,10 @@ fun SearchScreen(
                 }
         }
 
-        // No snackbar host on Search: the picker closing is the confirmation.
+        // Wave 2 wiring point: fire LocalOmegaSnackbar's
+        // "Added to {playlist}" here — the shell host is mounted
+        // (Detail's picker is the Wave 1 proof); until then the
+        // picker closing is the confirmation, as before.
         playlistTarget?.let { song ->
             PlaylistPickerDialog(
                 playlists = localPlaylists,

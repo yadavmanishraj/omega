@@ -4,8 +4,6 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -78,6 +76,7 @@ import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.download.DownloadWorker
 import com.manishraj.saavnmusic.ui.components.Artwork
+import com.manishraj.saavnmusic.ui.components.animatePaletteColor
 import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
 import com.manishraj.saavnmusic.ui.components.safeGradientEnd
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
@@ -149,16 +148,15 @@ fun MiniPlayer(
     val st by vm.state.collectAsState()
     val cur = st.current ?: return
     // Artwork tint (UIUX_DESIGN §3.1.3): the container takes the
-    // artwork's darkened color, crossfading 300 ms on track change.
+    // artwork's darkened color, crossfading on the shared palette
+    // helper (spec §4.4) on track change.
     val palette = rememberArtworkPalette(cur.imageUrl)
-    val containerColor by animateColorAsState(
+    val containerColor by animatePaletteColor(
         targetValue = palette.mutedDark,
-        animationSpec = tween(durationMillis = 300),
         label = "miniPlayerContainer",
     )
-    val contentColor by animateColorAsState(
+    val contentColor by animatePaletteColor(
         targetValue = palette.onMutedDark,
-        animationSpec = tween(durationMillis = 300),
         label = "miniPlayerContent",
     )
     Surface(onClick = onOpen, tonalElevation = 3.dp, color = containerColor) {
@@ -262,26 +260,24 @@ fun FullPlayer(
     }
     val fav by vm.isFavorite(cur.id).collectAsState(false)
     // Artwork gradient (UIUX_DESIGN §3.1.3): mutedDark at the top
-    // crossfading 300 ms on track change, theme background at the
-    // bottom. Header text/icons sit on the artwork color, so they use
-    // the palette's contrast-checked on-color in both themes.
+    // crossfading on the shared palette helper (spec §4.4) on track
+    // change, theme background at the bottom. Header text/icons sit
+    // on the artwork color, so they use the palette's
+    // contrast-checked on-color in both themes.
     val palette = rememberArtworkPalette(cur.imageUrl)
-    val gradientTop by animateColorAsState(
+    val gradientTop by animatePaletteColor(
         targetValue = palette.mutedDark,
-        animationSpec = tween(durationMillis = 300),
         label = "playerGradientTop",
     )
-    val artworkContentColor by animateColorAsState(
+    val artworkContentColor by animatePaletteColor(
         targetValue = palette.onMutedDark,
-        animationSpec = tween(durationMillis = 300),
         label = "playerArtworkContent",
     )
     // Fade end must keep the content color at 4.5:1 (see
     // safeGradientEnd) — in light themes the title/artist washed
     // out over the near-white background end (UI/UX Phase B audit).
-    val gradientEnd by animateColorAsState(
+    val gradientEnd by animatePaletteColor(
         targetValue = safeGradientEnd(palette, MaterialTheme.colorScheme.background),
-        animationSpec = tween(durationMillis = 300),
         label = "playerGradientEnd",
     )
     val playerBrush =

@@ -8,4 +8,8 @@ android {
 
 dependencies {
     implementation(projects.core.data)
+    implementation(projects.core.download)
+
+    // DetailViewModel enqueues downloads directly (row-menu Download).
+    implementation(libs.work.runtime)
 }

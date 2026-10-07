@@ -36,6 +36,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,9 @@ import com.manishraj.saavnmusic.feature.search.SearchScreen
 import com.manishraj.saavnmusic.feature.settings.SettingsScreen
 import com.manishraj.saavnmusic.feature.settings.SettingsViewModel
 import com.manishraj.saavnmusic.playback.PlayerController
+import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
+import com.manishraj.saavnmusic.ui.components.OmegaSnackbarHost
+import com.manishraj.saavnmusic.ui.components.rememberOmegaSnackbarController
 import com.manishraj.saavnmusic.ui.theme.OmegaMotion
 import com.manishraj.saavnmusic.ui.theme.SaavnTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -161,164 +165,172 @@ fun AppRoot() {
     // the player here (running the reverse transition) instead of
     // leaving the app while playback keeps going.
     BackHandler(enabled = showPlayer) { showPlayer = false }
-    SharedTransitionLayout {
-        val sharedScope = this
-        Scaffold(
-            bottomBar = {
-                Column {
-                    AnimatedVisibility(
-                        visible = !showPlayer,
-                        enter = miniEnter,
-                        exit = miniExit,
-                    ) {
-                        MiniPlayer(
-                            onOpen = { showPlayer = true },
-                            sharedTransitionScope = if (reducedMotion) null else sharedScope,
-                            animatedVisibilityScope = this,
-                            artworkBoundsTransform = artworkBoundsTransform,
-                        )
-                    }
-                    NavigationBar {
-                        listOf(
-                            TopLevelDestination("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
-                            TopLevelDestination("search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
-                            TopLevelDestination("library", "Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
-                            TopLevelDestination("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
-                        ).forEach { dest ->
-                            NavigationBarItem(
-                                selected = route == dest.route,
-                                onClick = {
-                                    nav.navigate(dest.route) {
-                                        popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        if (route == dest.route) dest.selectedIcon else dest.icon,
-                                        contentDescription = dest.label,
-                                    )
-                                },
-                                label = { Text(dest.label, maxLines = 1, softWrap = false) },
+    // App-wide snackbar feedback (spec §3/§7): one host for the whole
+    // shell. The Scaffold's snackbar slot renders ABOVE the bottom
+    // bar — i.e. above the mini-player — and screens fire messages
+    // through LocalOmegaSnackbar instead of growing private hosts.
+    val snackbarController = rememberOmegaSnackbarController()
+    CompositionLocalProvider(LocalOmegaSnackbar provides snackbarController) {
+        SharedTransitionLayout {
+            val sharedScope = this
+            Scaffold(
+                snackbarHost = { OmegaSnackbarHost(snackbarController) },
+                bottomBar = {
+                    Column {
+                        AnimatedVisibility(
+                            visible = !showPlayer,
+                            enter = miniEnter,
+                            exit = miniExit,
+                        ) {
+                            MiniPlayer(
+                                onOpen = { showPlayer = true },
+                                sharedTransitionScope = if (reducedMotion) null else sharedScope,
+                                animatedVisibilityScope = this,
+                                artworkBoundsTransform = artworkBoundsTransform,
                             )
                         }
-                    }
-                }
-            },
-        ) { padding ->
-            Box(Modifier.padding(padding)) {
-                AnimatedContent(
-                    targetState = showPlayer,
-                    modifier = Modifier.fillMaxSize(),
-                    transitionSpec = {
-                        // Material 3 container transform: the shared
-                        // artwork morphs; everything else cross-fades —
-                        // decelerate in over SLOW, accelerate out over
-                        // the shorter EXIT. Reduced motion: crossfade
-                        // only, at the FAST token.
-                        if (reducedMotion) {
-                            fadeIn(tween(OmegaMotion.FAST_MS)) togetherWith
-                                fadeOut(tween(OmegaMotion.FAST_MS))
-                        } else {
-                            fadeIn(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate)) togetherWith
-                                fadeOut(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate))
+                        NavigationBar {
+                            listOf(
+                                TopLevelDestination("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
+                                TopLevelDestination("search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
+                                TopLevelDestination("library", "Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
+                                TopLevelDestination("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
+                            ).forEach { dest ->
+                                NavigationBarItem(
+                                    selected = route == dest.route,
+                                    onClick = {
+                                        nav.navigate(dest.route) {
+                                            popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            if (route == dest.route) dest.selectedIcon else dest.icon,
+                                            contentDescription = dest.label,
+                                        )
+                                    },
+                                    label = { Text(dest.label, maxLines = 1, softWrap = false) },
+                                )
+                            }
                         }
-                    },
-                    label = "playerExpand",
-                ) { playerOpen ->
-                    if (playerOpen) {
-                        FullPlayer(
-                            onBack = { showPlayer = false },
-                            sharedTransitionScope = if (reducedMotion) null else sharedScope,
-                            animatedVisibilityScope = this,
-                            artworkBoundsTransform = artworkBoundsTransform,
-                        )
-                    } else {
-                        NavHost(nav, startDestination = "home") {
-                            composable("home") {
-                                HomeScreen(
-                                    onAlbum = { nav.navigate("album/$it") },
-                                    onPlaylist = { nav.navigate("playlist/$it") },
-                                    onArtist = { nav.navigate("artist/$it") },
-                                    onPlayQueue = playQueue,
-                                    onOpenDownloads = {
-                                        nav.navigate("library?tab=$LIBRARY_TAB_DOWNLOADS") {
-                                            popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                )
+                    }
+                },
+            ) { padding ->
+                Box(Modifier.padding(padding)) {
+                    AnimatedContent(
+                        targetState = showPlayer,
+                        modifier = Modifier.fillMaxSize(),
+                        transitionSpec = {
+                            // Material 3 container transform: the shared
+                            // artwork morphs; everything else cross-fades —
+                            // decelerate in over SLOW, accelerate out over
+                            // the shorter EXIT. Reduced motion: crossfade
+                            // only, at the FAST token.
+                            if (reducedMotion) {
+                                fadeIn(tween(OmegaMotion.FAST_MS)) togetherWith
+                                    fadeOut(tween(OmegaMotion.FAST_MS))
+                            } else {
+                                fadeIn(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate)) togetherWith
+                                    fadeOut(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate))
                             }
-                            composable("search") {
-                                SearchScreen(
-                                    onAlbum = { nav.navigate("album/$it") },
-                                    onPlaylist = { nav.navigate("playlist/$it") },
-                                    onArtist = { nav.navigate("artist/$it") },
-                                    onPlayQueue = playQueue,
-                                    onOpenLibrary = {
-                                        nav.navigate("library") {
-                                            popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                )
-                            }
-                            composable(
-                                "library?tab={tab}",
-                                arguments =
-                                    listOf(
-                                        navArgument("tab") {
-                                            type = NavType.IntType
-                                            defaultValue = -1
+                        },
+                        label = "playerExpand",
+                    ) { playerOpen ->
+                        if (playerOpen) {
+                            FullPlayer(
+                                onBack = { showPlayer = false },
+                                sharedTransitionScope = if (reducedMotion) null else sharedScope,
+                                animatedVisibilityScope = this,
+                                artworkBoundsTransform = artworkBoundsTransform,
+                            )
+                        } else {
+                            NavHost(nav, startDestination = "home") {
+                                composable("home") {
+                                    HomeScreen(
+                                        onAlbum = { nav.navigate("album/$it") },
+                                        onPlaylist = { nav.navigate("playlist/$it") },
+                                        onArtist = { nav.navigate("artist/$it") },
+                                        onPlayQueue = playQueue,
+                                        onOpenDownloads = {
+                                            nav.navigate("library?tab=$LIBRARY_TAB_DOWNLOADS") {
+                                                popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         },
-                                    ),
-                            ) { entry ->
-                                LibraryScreen(
-                                    onPlayQueue = playQueue,
-                                    onOpenSearch = {
-                                        nav.navigate("search") {
-                                            popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    initialTab = entry.arguments?.getInt("tab")?.takeIf { it >= 0 } ?: 0,
-                                )
-                            }
-                            composable("settings") { SettingsScreen() }
-                            composable(
-                                "album/{id}",
-                                arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                            ) {
-                                AlbumScreen(
-                                    it.arguments?.getString("id") ?: "",
-                                    onPlayQueue = playQueue,
-                                    onBack = { nav.popBackStack() },
-                                )
-                            }
-                            composable(
-                                "playlist/{id}",
-                                arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                            ) {
-                                PlaylistScreen(
-                                    it.arguments?.getString("id") ?: "",
-                                    onPlayQueue = playQueue,
-                                    onBack = { nav.popBackStack() },
-                                )
-                            }
-                            composable(
-                                "artist/{id}",
-                                arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                            ) {
-                                ArtistScreen(
-                                    it.arguments?.getString("id") ?: "",
-                                    onAlbum = { a -> nav.navigate("album/$a") },
-                                    onPlayQueue = playQueue,
-                                    onBack = { nav.popBackStack() },
-                                )
+                                    )
+                                }
+                                composable("search") {
+                                    SearchScreen(
+                                        onAlbum = { nav.navigate("album/$it") },
+                                        onPlaylist = { nav.navigate("playlist/$it") },
+                                        onArtist = { nav.navigate("artist/$it") },
+                                        onPlayQueue = playQueue,
+                                        onOpenLibrary = {
+                                            nav.navigate("library") {
+                                                popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                    )
+                                }
+                                composable(
+                                    "library?tab={tab}",
+                                    arguments =
+                                        listOf(
+                                            navArgument("tab") {
+                                                type = NavType.IntType
+                                                defaultValue = -1
+                                            },
+                                        ),
+                                ) { entry ->
+                                    LibraryScreen(
+                                        onPlayQueue = playQueue,
+                                        onOpenSearch = {
+                                            nav.navigate("search") {
+                                                popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                        initialTab = entry.arguments?.getInt("tab")?.takeIf { it >= 0 } ?: 0,
+                                    )
+                                }
+                                composable("settings") { SettingsScreen() }
+                                composable(
+                                    "album/{id}",
+                                    arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                                ) {
+                                    AlbumScreen(
+                                        it.arguments?.getString("id") ?: "",
+                                        onPlayQueue = playQueue,
+                                        onBack = { nav.popBackStack() },
+                                    )
+                                }
+                                composable(
+                                    "playlist/{id}",
+                                    arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                                ) {
+                                    PlaylistScreen(
+                                        it.arguments?.getString("id") ?: "",
+                                        onPlayQueue = playQueue,
+                                        onBack = { nav.popBackStack() },
+                                    )
+                                }
+                                composable(
+                                    "artist/{id}",
+                                    arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                                ) {
+                                    ArtistScreen(
+                                        it.arguments?.getString("id") ?: "",
+                                        onAlbum = { a -> nav.navigate("album/$a") },
+                                        onPlayQueue = playQueue,
+                                        onBack = { nav.popBackStack() },
+                                    )
+                                }
                             }
                         }
                     }

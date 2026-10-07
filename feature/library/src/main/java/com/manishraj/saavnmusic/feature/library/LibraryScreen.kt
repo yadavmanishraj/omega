@@ -136,6 +136,23 @@ fun LibraryScreen(
             )
         }
     }
+    // One unfavorite path for the Favorites tab: the heart button
+    // AND the row menu's "Remove from favorites" both go through
+    // here, so both get the Undo snackbar.
+    val unfavoriteWithUndo: (Song) -> Unit = { song ->
+        vm.unfavorite(song)
+        scope.launch {
+            val result =
+                snackbar.showSnackbar(
+                    "Removed from favorites",
+                    actionLabel = "Undo",
+                    duration = SnackbarDuration.Short,
+                )
+            if (result == SnackbarResult.ActionPerformed) {
+                vm.restoreFavorite(song)
+            }
+        }
+    }
 
     val playlist = openPlaylist
     if (playlist != null) {
@@ -271,21 +288,14 @@ fun LibraryScreen(
                                     { onPlayQueue(ordered, ordered.indexOf(song)) },
                                     trailing = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            SongOverflowMenuButton(song) { playlistTarget = song }
-                                            IconButton(onClick = {
-                                                vm.unfavorite(song)
-                                                scope.launch {
-                                                    val result =
-                                                        snackbar.showSnackbar(
-                                                            "Removed from favorites",
-                                                            actionLabel = "Undo",
-                                                            duration = SnackbarDuration.Short,
-                                                        )
-                                                    if (result == SnackbarResult.ActionPerformed) {
-                                                        vm.restoreFavorite(song)
-                                                    }
-                                                }
-                                            }) {
+                                            SongOverflowMenuButton(
+                                                song = song,
+                                                isFavorite = true,
+                                                onDownload = { vm.download(song) },
+                                                onToggleFavorite = { unfavoriteWithUndo(song) },
+                                                onAddToPlaylist = { playlistTarget = song },
+                                            )
+                                            IconButton(onClick = { unfavoriteWithUndo(song) }) {
                                                 Icon(
                                                     Icons.Filled.Favorite,
                                                     contentDescription = "Remove ${song.name} from favorites",
@@ -404,11 +414,18 @@ fun LibraryScreen(
                         val ordered = sorted(hist, sortMode) { it.name }
                         LazyColumn {
                             items(ordered) { song ->
+                                val songIsFavorite = favs.any { it.id == song.id }
                                 SongRow(
                                     song,
                                     { onPlayQueue(ordered, ordered.indexOf(song)) },
                                     trailing = {
-                                        SongOverflowMenuButton(song) { playlistTarget = song }
+                                        SongOverflowMenuButton(
+                                            song = song,
+                                            isFavorite = songIsFavorite,
+                                            onDownload = { vm.download(song) },
+                                            onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                            onAddToPlaylist = { playlistTarget = song },
+                                        )
                                     },
                                 )
                             }
@@ -594,6 +611,7 @@ private fun LocalPlaylistDetail(
     val songs by produceState<List<Song>>(emptyList(), playlist.id) {
         vm.playlistSongs(playlist.id).collect { value = it }
     }
+    val favs by vm.favorites.collectAsState()
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -615,11 +633,18 @@ private fun LocalPlaylistDetail(
         } else {
             LazyColumn {
                 items(songs) { song ->
+                    val songIsFavorite = favs.any { it.id == song.id }
                     SongRow(
                         song,
                         { onPlayQueue(songs, songs.indexOf(song)) },
                         trailing = {
-                            SongOverflowMenuButton(song) { playlistTarget = song }
+                            SongOverflowMenuButton(
+                                song = song,
+                                isFavorite = songIsFavorite,
+                                onDownload = { vm.download(song) },
+                                onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                onAddToPlaylist = { playlistTarget = song },
+                            )
                         },
                     )
                 }

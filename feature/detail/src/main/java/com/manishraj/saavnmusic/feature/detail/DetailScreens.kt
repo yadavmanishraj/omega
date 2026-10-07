@@ -35,6 +35,7 @@ import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.ui.components.Artwork
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.GradientHeader
+import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
@@ -52,13 +53,17 @@ fun AlbumScreen(
 ) {
     LaunchedEffect(id) { vm.loadAlbum(id) }
     val s by vm.album.collectAsState()
+    val favorites by vm.favorites.collectAsState()
     val requestAddToPlaylist = rememberPlaylistPicker(vm)
     DetailList(
         s,
         { it.songs },
         { a -> SongListHeader(a.name, a.artist, a.imageUrl, a.description, onBack) },
         onPlayQueue,
+        favorites = favorites,
         onAddToPlaylist = requestAddToPlaylist,
+        onDownload = { vm.download(it) },
+        onToggleFavorite = { song, isFav -> vm.toggleFavorite(song, isFav) },
     ) { vm.loadAlbum(id) }
 }
 
@@ -71,24 +76,31 @@ fun PlaylistScreen(
 ) {
     LaunchedEffect(id) { vm.loadPlaylist(id) }
     val s by vm.playlist.collectAsState()
+    val favorites by vm.favorites.collectAsState()
     val requestAddToPlaylist = rememberPlaylistPicker(vm)
     DetailList(
         s,
         { it.songs },
         { p -> SongListHeader(p.name, "Playlist", p.imageUrl, p.description, onBack) },
         onPlayQueue,
+        favorites = favorites,
         onAddToPlaylist = requestAddToPlaylist,
+        onDownload = { vm.download(it) },
+        onToggleFavorite = { song, isFav -> vm.toggleFavorite(song, isFav) },
     ) { vm.loadPlaylist(id) }
 }
 
 /**
  * Hosts the add-to-playlist picker for a detail screen: returns the
- * request callback handed to song rows. No snackbar host exists on
- * these screens, so the picker closing is the confirmation.
+ * request callback handed to song rows. Confirmation rides the
+ * app-shell snackbar (mounted above the mini-player): a successful
+ * pick or create shows "Added to {playlist}" — the Wave 1 proof event
+ * for the shared snackbar system.
  */
 @Composable
 private fun rememberPlaylistPicker(vm: DetailViewModel): (Song) -> Unit {
     val playlists by vm.playlists.collectAsState()
+    val snackbar = LocalOmegaSnackbar.current
     var target by remember { mutableStateOf<Song?>(null) }
     target?.let { song ->
         PlaylistPickerDialog(
@@ -96,10 +108,12 @@ private fun rememberPlaylistPicker(vm: DetailViewModel): (Song) -> Unit {
             onPick = { playlist ->
                 vm.addToPlaylist(playlist.id, song)
                 target = null
+                snackbar?.showMessage("Added to ${playlist.name}")
             },
             onCreatePlaylist = { name ->
                 vm.createPlaylistAndAdd(name, song)
                 target = null
+                snackbar?.showMessage("Added to $name")
             },
             onDismiss = { target = null },
         )
@@ -113,7 +127,10 @@ fun <T> DetailList(
     songs: (T) -> List<Song>,
     header: @Composable (T) -> Unit,
     play: (List<Song>, Int) -> Unit,
+    favorites: List<Song>,
     onAddToPlaylist: (Song) -> Unit,
+    onDownload: (Song) -> Unit,
+    onToggleFavorite: (Song, Boolean) -> Unit,
     retry: () -> Unit,
 ) {
     when (state) {
@@ -134,11 +151,18 @@ fun <T> DetailList(
                     }
                 }
                 items(list) { song ->
+                    val isFavorite = favorites.any { it.id == song.id }
                     SongRow(
                         song,
                         { play(list, list.indexOf(song)) },
                         trailing = {
-                            SongOverflowMenuButton(song) { onAddToPlaylist(song) }
+                            SongOverflowMenuButton(
+                                song = song,
+                                isFavorite = isFavorite,
+                                onDownload = { onDownload(song) },
+                                onToggleFavorite = { onToggleFavorite(song, isFavorite) },
+                                onAddToPlaylist = { onAddToPlaylist(song) },
+                            )
                         },
                     )
                 }
@@ -201,6 +225,7 @@ fun ArtistScreen(
 ) {
     LaunchedEffect(id) { vm.loadArtist(id) }
     val s by vm.artist.collectAsState()
+    val favorites by vm.favorites.collectAsState()
     val requestAddToPlaylist = rememberPlaylistPicker(vm)
     when (val a = s) {
         is UiState.Loading -> ShimmerList()
@@ -218,11 +243,18 @@ fun ArtistScreen(
                 }
                 item { SectionHeader("Top songs") }
                 items(a.data.topSongs) { song ->
+                    val isFavorite = favorites.any { it.id == song.id }
                     SongRow(
                         song,
                         { onPlayQueue(a.data.topSongs, a.data.topSongs.indexOf(song)) },
                         trailing = {
-                            SongOverflowMenuButton(song) { requestAddToPlaylist(song) }
+                            SongOverflowMenuButton(
+                                song = song,
+                                isFavorite = isFavorite,
+                                onDownload = { vm.download(song) },
+                                onToggleFavorite = { vm.toggleFavorite(song, isFavorite) },
+                                onAddToPlaylist = { requestAddToPlaylist(song) },
+                            )
                         },
                     )
                 }

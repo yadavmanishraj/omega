@@ -49,6 +49,26 @@ class LibraryViewModel
             viewModelScope.launch { repo.toggleFavorite(song, fav = true) }
         }
 
+        /** Row-menu favorite toggle (the shared menu's Add/Remove). */
+        fun toggleFavorite(
+            song: Song,
+            isFavorite: Boolean,
+        ) {
+            viewModelScope.launch { repo.toggleFavorite(song, isFavorite) }
+        }
+
+        /**
+         * Row-menu Download (menu parity, spec §3): the same enqueue
+         * [retryDownload] uses — settings quality + the shared worker,
+         * which registers the Library row itself on start.
+         */
+        fun download(song: Song) {
+            viewModelScope.launch {
+                val quality = repo.settings.first().downloadQuality
+                DownloadWorker.enqueue(WorkManager.getInstance(context), song, quality)
+            }
+        }
+
         fun restoreFavorite(song: Song) {
             viewModelScope.launch { repo.addFavorite(song) }
         }

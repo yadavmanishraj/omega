@@ -1,7 +1,6 @@
 package com.manishraj.saavnmusic.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -30,11 +29,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -44,8 +48,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.formatDuration
+import com.manishraj.saavnmusic.ui.theme.LocalReducedMotion
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
+import kotlinx.coroutines.delay
 
 /**
  * Shared UI primitives (REDESIGN_SPEC §3.4): every screen composes these
@@ -201,8 +207,68 @@ fun MediaCard(
     }
 }
 
+/** Pause between shimmer sweeps, so the highlight reads as a pass,
+ * not a strobe. */
+private const val SHIMMER_PAUSE_MS = 350L
+
+/**
+ * Shimmer phase for the skeleton placeholders (M3 Expressive spec §3:
+ * skeletons gain a sweep, closing the standing "static skeletons"
+ * gap). One [Animatable] per skeleton block drives every placeholder
+ * shape in sync; the sweep runs on the theme's SLOW EFFECTS spec — a
+ * critically damped spring, so the highlight eases across with no
+ * overshoot, in the same motion family as the rest of the app.
+ *
+ * Reduced motion ([LocalReducedMotion], animator scale 0): the phase
+ * pins to 0 and the blocks are static, exactly as before.
+ */
+@Composable
+private fun rememberShimmerPhase(): Float {
+    val reducedMotion = LocalReducedMotion.current
+    val sweepSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+    val phase = remember { Animatable(0f) }
+    LaunchedEffect(reducedMotion, sweepSpec) {
+        if (reducedMotion) {
+            phase.snapTo(0f)
+        } else {
+            while (true) {
+                phase.animateTo(1f, sweepSpec)
+                delay(SHIMMER_PAUSE_MS)
+                phase.snapTo(0f)
+            }
+        }
+    }
+    return phase.value
+}
+
+/** Draws the moving highlight band over a skeleton block at [phase]
+ * (0 = off-screen left, 1 = off-screen right). Draws nothing at phase
+ * 0, which is the reduced-motion resting state. Applied AFTER the
+ * block's clip + background so the band stays inside its corners. */
+private fun Modifier.shimmerSweep(
+    phase: Float,
+    highlight: Color,
+): Modifier =
+    drawWithContent {
+        drawContent()
+        if (phase > 0f) {
+            val bandWidth = size.width * 0.6f
+            val startX = -bandWidth + phase * (size.width + 2 * bandWidth)
+            drawRect(
+                brush =
+                    Brush.linearGradient(
+                        colors = listOf(Color.Transparent, highlight, Color.Transparent),
+                        start = Offset(startX, 0f),
+                        end = Offset(startX + bandWidth, 0f),
+                    ),
+            )
+        }
+    }
+
 @Composable
 fun ShimmerList() {
+    val phase = rememberShimmerPhase()
+    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     Column {
         repeat(6) {
             Row(
@@ -215,7 +281,8 @@ fun ShimmerList() {
                     Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(OmegaRadius.md))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .shimmerSweep(phase, highlight),
                 )
                 Spacer(Modifier.width(OmegaSpacing.md))
                 Column {
@@ -223,14 +290,16 @@ fun ShimmerList() {
                         Modifier
                             .fillMaxWidth(0.7f)
                             .height(14.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .shimmerSweep(phase, highlight),
                     )
                     Spacer(Modifier.height(OmegaSpacing.sm))
                     Box(
                         Modifier
                             .fillMaxWidth(0.45f)
                             .height(12.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .shimmerSweep(phase, highlight),
                     )
                 }
             }
@@ -241,6 +310,8 @@ fun ShimmerList() {
 /** Card-grid skeleton matching MediaCard dimensions (Search grids, Home rails). */
 @Composable
 fun ShimmerGrid() {
+    val phase = rememberShimmerPhase()
+    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     Column(Modifier.padding(horizontal = OmegaSpacing.lg)) {
         repeat(2) {
             Row {
@@ -255,14 +326,16 @@ fun ShimmerGrid() {
                                 .fillMaxWidth()
                                 .height(132.dp)
                                 .clip(RoundedCornerShape(OmegaRadius.lg))
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .shimmerSweep(phase, highlight),
                         )
                         Spacer(Modifier.height(OmegaSpacing.sm))
                         Box(
                             Modifier
                                 .fillMaxWidth(0.8f)
                                 .height(12.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .shimmerSweep(phase, highlight),
                         )
                     }
                 }
@@ -374,13 +447,13 @@ fun GradientHeader(
 ) {
     // Artwork-derived header (UIUX_DESIGN §3.1.3): the gradient runs
     // from the artwork's darkened palette color into the theme
-    // background, crossfading 300 ms when the artwork changes; header
-    // content uses the palette's contrast-checked on-color. Falls back
-    // to the deep-teal palette when there is no artwork.
+    // background, crossfading on the shared effects-spec helper
+    // (animatePaletteColor, spec §4.4) when the artwork changes;
+    // header content uses the palette's contrast-checked on-color.
+    // Falls back to the deep-teal palette when there is no artwork.
     val palette = rememberArtworkPalette(imageUrl)
-    val gradientTop by animateColorAsState(
+    val gradientTop by animatePaletteColor(
         targetValue = palette.mutedDark,
-        animationSpec = tween(durationMillis = 300),
         label = "headerGradientTop",
     )
     // The fade must end where the content color still passes 4.5:1 —
@@ -388,14 +461,12 @@ fun GradientHeader(
     // text invisible (UI/UX Phase B audit). safeGradientEnd keeps
     // the seamless fade in dark themes and a legible dark band in
     // light ones.
-    val gradientEnd by animateColorAsState(
+    val gradientEnd by animatePaletteColor(
         targetValue = safeGradientEnd(palette, MaterialTheme.colorScheme.background),
-        animationSpec = tween(durationMillis = 300),
         label = "headerGradientEnd",
     )
-    val contentColor by animateColorAsState(
+    val contentColor by animatePaletteColor(
         targetValue = palette.onMutedDark,
-        animationSpec = tween(durationMillis = 300),
         label = "headerContent",
     )
     Box(

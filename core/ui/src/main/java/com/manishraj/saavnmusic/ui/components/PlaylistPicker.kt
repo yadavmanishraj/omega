@@ -10,9 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -36,14 +39,35 @@ import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
 /**
- * Overflow (⋮) button for a song row: the single entry point into
- * song-level actions across Home / Search / Detail / Library lists.
- * Today it carries "Add to playlist"; future song actions belong here
- * too, so every list behaves the same way.
+ * Overflow (⋮) button for a song row: THE single song-action menu for
+ * every list in the app (M3 Expressive spec §3 — menu parity). One
+ * definition lives here; the items a row shows are the callbacks its
+ * screen provides:
+ *
+ * - Play next ([onPlayNext], only when the screen can queue) —
+ *   no call site provides it yet: the playback engine has no
+ *   insert-next operation, and spec §10 forbids engine changes in
+ *   this program. The slot exists so the day the engine grows one,
+ *   every row gains it by passing one more callback.
+ * - Add to playlist ([onAddToPlaylist], always).
+ * - Download ([onDownload]).
+ * - Favorite / Remove from favorites ([onToggleFavorite], label and
+ *   icon driven by [isFavorite]).
+ *
+ * Menu content parity is the D6 fix: Detail rows used to offer ONLY
+ * "Add to playlist" while the player could download and favorite —
+ * now every row everywhere offers the same actions. Screens must
+ * pass every callback they can honor; a missing callback is a
+ * deliberate product decision, never an accident of which screen the
+ * row happens to render on.
  */
 @Composable
 fun SongOverflowMenuButton(
     song: Song,
+    isFavorite: Boolean = false,
+    onPlayNext: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
+    onToggleFavorite: (() -> Unit)? = null,
     onAddToPlaylist: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -54,6 +78,16 @@ fun SongOverflowMenuButton(
         )
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        if (onPlayNext != null) {
+            DropdownMenuItem(
+                text = { Text("Play next", maxLines = 1, softWrap = false) },
+                leadingIcon = { Icon(Icons.Filled.PlaylistPlay, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onPlayNext()
+                },
+            )
+        }
         DropdownMenuItem(
             text = { Text("Add to playlist", maxLines = 1, softWrap = false) },
             leadingIcon = { Icon(Icons.Filled.PlaylistAdd, contentDescription = null) },
@@ -62,6 +96,37 @@ fun SongOverflowMenuButton(
                 onAddToPlaylist()
             },
         )
+        if (onDownload != null) {
+            DropdownMenuItem(
+                text = { Text("Download", maxLines = 1, softWrap = false) },
+                leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onDownload()
+                },
+            )
+        }
+        if (onToggleFavorite != null) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onToggleFavorite()
+                },
+            )
+        }
     }
 }
 
@@ -170,12 +235,13 @@ private fun NewPlaylistForm(
             )
             Spacer(Modifier.height(OmegaSpacing.md))
         }
-        Text("Playlist name", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(OmegaSpacing.xs))
+        // The field's label names it; the placeholder is an EXAMPLE,
+        // never the label repeated (spec §7 microcopy fix).
         OutlinedTextField(
             value = name,
             onValueChange = onNameChange,
             label = { Text("Playlist name") },
+            placeholder = { Text("e.g. Monsoon drive") },
             singleLine = true,
             isError = interacted && name.isBlank(),
             supportingText = {

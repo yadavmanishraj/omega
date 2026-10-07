@@ -182,7 +182,13 @@ fun HomeScreen(
                             song,
                             { onPlayQueue(favorites, favorites.indexOf(song)) },
                             trailing = {
-                                SongOverflowMenuButton(song) { playlistTarget = song }
+                                SongOverflowMenuButton(
+                                    song = song,
+                                    isFavorite = true,
+                                    onDownload = { vm.download(song) },
+                                    onToggleFavorite = { vm.toggleFavorite(song, true) },
+                                    onAddToPlaylist = { playlistTarget = song },
+                                )
                             },
                         )
                     }
@@ -225,11 +231,18 @@ fun HomeScreen(
                             if (s.data.isNotEmpty()) {
                                 item { SectionHeader("Trending songs") }
                                 items(s.data.take(10)) { song ->
+                                    val songIsFavorite = favorites.any { it.id == song.id }
                                     SongRow(
                                         song,
                                         { onPlayQueue(s.data, s.data.indexOf(song)) },
                                         trailing = {
-                                            SongOverflowMenuButton(song) { playlistTarget = song }
+                                            SongOverflowMenuButton(
+                                                song = song,
+                                                isFavorite = songIsFavorite,
+                                                onDownload = { vm.download(song) },
+                                                onToggleFavorite = { vm.toggleFavorite(song, songIsFavorite) },
+                                                onAddToPlaylist = { playlistTarget = song },
+                                            )
                                         },
                                     )
                                 }
@@ -308,7 +321,10 @@ fun HomeScreen(
         }
     }
 
-    // No snackbar host on Home: the picker closing is the confirmation.
+    // Wave 2 wiring point: fire LocalOmegaSnackbar's
+    // "Added to {playlist}" here — the shell host is mounted
+    // (Detail's picker is the Wave 1 proof); until then the
+    // picker closing is the confirmation, as before.
     playlistTarget?.let { song ->
         PlaylistPickerDialog(
             playlists = localPlaylists,

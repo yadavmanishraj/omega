@@ -377,6 +377,8 @@ fun SaavnTheme(
         motionScheme = MotionScheme.expressive(),
         shapes = OmegaShapes,
         typography = OmegaTypography,
-        content = content,
+        // Reduced-motion state (spec §2.5) rides the theme so every
+        // screen and shared component sees the same live value.
+        content = { ProvideReducedMotion(content) },
     )
 }
