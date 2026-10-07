@@ -63,6 +63,34 @@ fun unescapeHtml(value: String?): String {
     }
 }
 
+private val HorizontalSpaceRun = Regex("[ \\t]+")
+
+/**
+ * Collapses the horizontal-whitespace pathology upstream bakes into
+ * description prose (A17 audit F-03). Live evidence: the "Best Of
+ * Romance – Hindi" playlist's `header_desc` pads its first line with
+ * 136 spaces before the newline ("Top love songs in Hindi." + the
+ * run + "\nArtists On Cover: …"). Android's line breaker hangs a
+ * trailing space run on its line instead of wrapping it, so the
+ * centered Detail header paragraph centers that line by its FULL
+ * advance width — sentence plus padding — and the sentence shears
+ * off the left screen edge, worse as the font scale grows the run.
+ * No width constraint on the Text can fix a line whose own width is
+ * the padding; the string itself has to arrive sane. The source is
+ * HTML, where whitespace runs collapse by definition, so collapsing
+ * them at ingestion is lossless: each line's space/tab runs become
+ * one space and lines are trimmed, while the newline structure and
+ * single spaces survive untouched.
+ */
+fun normalizeDescriptionText(value: String): String =
+    value
+        .split('\n')
+        .joinToString("\n") { line -> line.replace(HorizontalSpaceRun, " ").trim() }
+        .trim()
+
+/** [unescapeHtml] + [normalizeDescriptionText] — the full treatment for description prose. */
+private fun unescapeDescription(value: String?): String = normalizeDescriptionText(unescapeHtml(value))
+
 private fun RawArtistMapGroupDto?.primaryNames(): String =
     this
         ?.primary
@@ -123,7 +151,7 @@ fun RawAlbumDto.toDomain(): Album =
         year = year,
         songCount = (listCount ?: moreInfo?.songCount)?.toIntOrNull(),
         songs = list.map { it.toDomain() },
-        description = headerDesc?.let { unescapeHtml(it) },
+        description = headerDesc?.let { unescapeDescription(it) },
     )
 
 fun RawPlaylistDto.toDomain(): Playlist =
@@ -135,7 +163,7 @@ fun RawPlaylistDto.toDomain(): Playlist =
         // requested page (UPSTREAM_VALIDATION §5).
         songCount = (listCount ?: moreInfo?.songCount)?.toIntOrNull(),
         songs = list.map { it.toDomain() },
-        description = (headerDesc ?: description)?.let { unescapeHtml(it) },
+        description = (headerDesc ?: description)?.let { unescapeDescription(it) },
     )
 
 /** Artist bio arrives as a JSON-encoded string of [{text, title, sequence}]; decode defensively. */
@@ -145,12 +173,12 @@ private fun parseBio(
 ): String? {
     if (raw.isNullOrBlank()) return null
     val trimmed = raw.trim()
-    if (!trimmed.startsWith("[")) return unescapeHtml(trimmed)
+    if (!trimmed.startsWith("[")) return unescapeDescription(trimmed)
     return try {
         val segments = json.decodeFromString(ListSerializer(BioSegmentDto.serializer()), trimmed)
         segments
             .mapNotNull { it.text?.takeIf { t -> t.isNotBlank() } }
-            .joinToString("\n\n") { unescapeHtml(it) }
+            .joinToString("\n\n") { unescapeDescription(it) }
             .ifBlank { null }
     } catch (e: Exception) {
         // A malformed bio must not kill the artist page (spec §4.8).
@@ -199,7 +227,7 @@ fun RawGlobalAlbumItemDto.toDomain(): Album =
         imageUrl = MediaUrlFactory.bestImage(image),
         year = moreInfo?.year,
         songCount = null,
-        description = description?.let { unescapeHtml(it) },
+        description = description?.let { unescapeDescription(it) },
     )
 
 fun RawGlobalArtistItemDto.toDomain(): Artist =
@@ -215,7 +243,7 @@ fun RawGlobalPlaylistItemDto.toDomain(): Playlist =
         name = unescapeHtml(title),
         imageUrl = MediaUrlFactory.bestImage(image),
         songCount = null,
-        description = description?.let { unescapeHtml(it) },
+        description = description?.let { unescapeDescription(it) },
     )
 
 /**
@@ -240,7 +268,7 @@ fun RawGlobalTopItemDto.toTopResult(): TopResult? {
                     imageUrl = itemImage,
                     year = moreInfo?.year,
                     songCount = null,
-                    description = description?.let { unescapeHtml(it) },
+                    description = description?.let { unescapeDescription(it) },
                 ),
             )
         "artist" ->
@@ -258,7 +286,7 @@ fun RawGlobalTopItemDto.toTopResult(): TopResult? {
                     name = itemTitle,
                     imageUrl = itemImage,
                     songCount = null,
-                    description = description?.let { unescapeHtml(it) },
+                    description = description?.let { unescapeDescription(it) },
                 ),
             )
         else ->
