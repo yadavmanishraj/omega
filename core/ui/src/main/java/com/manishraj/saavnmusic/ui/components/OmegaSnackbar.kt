@@ -11,6 +11,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * App-wide snackbar feedback (M3 Expressive spec §3/§7): short
@@ -29,21 +31,66 @@ class OmegaSnackbarController internal constructor(
     val hostState: SnackbarHostState,
     private val scope: CoroutineScope,
 ) {
+    private val presenter =
+        SnackbarPresenter { request ->
+            hostState.showSnackbar(
+                message = request.message,
+                actionLabel = request.actionLabel,
+                duration = request.duration,
+            )
+        }
+
     fun showMessage(
         message: String,
         actionLabel: String? = null,
         onAction: (() -> Unit)? = null,
     ) {
-        scope.launch {
-            hostState.currentSnackbarData?.dismiss()
-            val result =
-                hostState.showSnackbar(
-                    message = message,
-                    actionLabel = actionLabel,
-                    duration = SnackbarDuration.Short,
-                )
-            if (result == SnackbarResult.ActionPerformed) {
-                onAction?.invoke()
+        val request =
+            SnackbarRequest(
+                message = message,
+                actionLabel = actionLabel,
+                // A message carrying an action (Undo) gets the long
+                // duration: its recovery window is the whole point.
+                duration =
+                    if (actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
+                onAction = onAction,
+            )
+        scope.launch { presenter.present(request) }
+    }
+}
+
+/** One queued snackbar: what to show and what its action does. */
+internal class SnackbarRequest(
+    val message: String,
+    val actionLabel: String?,
+    val duration: SnackbarDuration,
+    val onAction: (() -> Unit)? = null,
+)
+
+/**
+ * Serializes snackbar presentation (F-06). The old controller called
+ * `currentSnackbarData?.dismiss()` before every show, so ANY later
+ * message silently killed the one on screen — an Undo snackbar for a
+ * destructive action could be stolen ~2.5 s into its window by an
+ * unrelated "Will play next", turning a reversible action into a
+ * permanent one.
+ *
+ * Here a [Mutex] guarantees one presentation at a time: a message
+ * displays only after the previous one completes (action tapped,
+ * timeout, or swipe-dismiss), in FIFO order. An action-bearing
+ * message is therefore never displaced by a later one.
+ *
+ * The [show] seam keeps the queue testable without a composed host.
+ */
+internal class SnackbarPresenter(
+    private val show: suspend (SnackbarRequest) -> SnackbarResult,
+) {
+    private val mutex = Mutex()
+
+    suspend fun present(request: SnackbarRequest) {
+        mutex.withLock {
+            if (show(request) == SnackbarResult.ActionPerformed) {
+                request.onAction?.invoke()
             }
         }
     }
