@@ -6,6 +6,7 @@ import androidx.media3.common.*
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
+import com.manishraj.saavnmusic.data.session.PlaybackSessionStore
 import com.manishraj.saavnmusic.domain.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
@@ -23,6 +24,15 @@ data class PlayerState(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val speed: Float = 1f,
     /**
+     * The armed sleep-timer preset in minutes (0 = off) and the live
+     * remaining time, both published by the controller (F-05): the
+     * timer's truth lives here, so the player UI shows the armed
+     * state after collapse/reopen instead of a composition-local
+     * memory that forgot it.
+     */
+    val sleepMinutes: Int = 0,
+    val sleepRemainingMs: Long = 0,
+    /**
      * The last playback failure, surfaced honestly to the UI (player
      * error line + snackbar) instead of the old silent 0:00 player.
      * Cleared on the next successful prepare (STATE_READY), on a new
@@ -37,6 +47,13 @@ data class PlayerState(
     @Inject
     constructor(
         @ApplicationContext private val ctx: Context,
+        /**
+         * Session persistence (F-16). Nullable with a default so the
+         * JVM unit tests that construct the controller directly (no
+         * Hilt graph) keep compiling and simply run without
+         * persistence; Hilt always provides the real store.
+         */
+        private val sessionStore: PlaybackSessionStore? = null,
     ) {
         private var controller: MediaController? = null
         private val _state = MutableStateFlow(PlayerState())
@@ -55,6 +72,99 @@ data class PlayerState(
         private val playStartTracker = PlayStartTracker()
         private val _playStarts = MutableSharedFlow<Song>(extraBufferCapacity = 32)
         val playStarts: SharedFlow<Song> = _playStarts.asSharedFlow()
+
+        // Sleep timer (F-05): the tracker owns the armed preset and
+        // its deadline; PlayerState publishes both (see SleepTimer.kt).
+        private val sleepTimer = SleepTimerTracker()
+        private var sleepJob: Job? = null
+
+        // Session restore (F-16): (queue index, position) of a
+        // persisted session that has been published as state but
+        // whose engine timeline has NOT been built yet. Building it
+        // is deferred to the first transport action so a cold start
+        // loads nothing (and can surface no spurious playback
+        // error); while it is pending, the position poll must not
+        // clobber the restored position with the empty player's 0.
+        private var pendingRestore: Pair<Int, Long>? = null
+
+        init {
+            scope.launch { restorePersistedSession() }
+        }
+
+        /**
+         * Writes the current queue/index/position as the restorable
+         * session (F-16); clears the stored session when the queue
+         * is gone. Fire-and-forget on the controller scope — a lost
+         * write only ever costs a staler resume point.
+         */
+        private fun persistSession() {
+            val store = sessionStore ?: return
+            val st = _state.value
+            val index = st.queue.indexOfFirst { it.id == st.current?.id }
+            val session = PlaybackSessionCodec.snapshot(st.queue, index, st.positionMs)
+            scope.launch {
+                if (session == null) {
+                    store.clear()
+                } else {
+                    store.save(PlaybackSessionCodec.encode(session))
+                }
+            }
+        }
+
+        /**
+         * Cold-start restore (F-16): if a persisted session exists,
+         * publish it PAUSED — queue, current song, saved position —
+         * so the mini-player returns exactly where the process died.
+         * Never auto-plays, and never overrides a session the user
+         * already started in this process.
+         */
+        private suspend fun restorePersistedSession() {
+            val store = sessionStore ?: return
+            val restored =
+                PlaybackSessionCodec.decode(store.sessionJson.first())?.toRestoredPlayback()
+                    ?: return
+            if (_state.value.queue.isNotEmpty() || _state.value.current != null) return
+            pendingRestore = restored.currentIndex to restored.positionMs
+            val current = restored.queue[restored.currentIndex]
+            _state.update {
+                it.copy(
+                    queue = restored.queue,
+                    current = current,
+                    positionMs = restored.positionMs,
+                    durationMs = (current.durationSec ?: 0) * 1000,
+                    isPlaying = false,
+                )
+            }
+        }
+
+        /**
+         * Builds the engine timeline for a restored session at the
+         * restored index/position (prepared, not yet playing — the
+         * caller decides). Returns true when it materialized one.
+         * The timeline is built from the PUBLISHED queue, so edits
+         * made since the restore (Play next) are honored.
+         */
+        private fun materializePendingRestore(c: MediaController): Boolean {
+            val pending = pendingRestore ?: return false
+            if (c.mediaItemCount > 0) {
+                pendingRestore = null
+                return false
+            }
+            val indexedPairs =
+                _state.value.queue.mapIndexedNotNull { queueIndex, song ->
+                    mediaItemFor(song, lastQuality)?.let { item -> queueIndex to item }
+                }
+            if (indexedPairs.isEmpty()) {
+                pendingRestore = null
+                return false
+            }
+            val startPos =
+                indexedPairs.indexOfLast { it.first <= pending.first }.takeIf { it >= 0 } ?: 0
+            c.setMediaItems(indexedPairs.map { it.second }, startPos, pending.second)
+            c.prepare()
+            pendingRestore = null
+            return true
+        }
 
         fun connect() {
             if (controller !=
@@ -113,22 +223,44 @@ data class PlayerState(
                 },
             )
             scope.launch {
+                var ticks = 0
                 while (true) {
                     val p = controller
                     if (p !=
                         null
                     ) {
-                        // While a user seek is unconfirmed, the
-                        // player's position snapshot is the PRE-seek
-                        // value — publishing it reverted the UI to
-                        // the exact pre-gesture position (BUG-2).
-                        val positionMs =
-                            pendingSeeks.resolve(
-                                p.currentPosition,
-                                p.currentMediaItem?.mediaId,
-                                SystemClock.elapsedRealtime(),
-                            )
-                        _state.update { it.copy(positionMs = positionMs, durationMs = p.duration.coerceAtLeast(0)) }
+                        // While a restored session (F-16) awaits its
+                        // first transport action the engine timeline
+                        // is empty: its 0 position/duration must not
+                        // clobber the restored ones.
+                        if (pendingRestore == null) {
+                            // While a user seek is unconfirmed, the
+                            // player's position snapshot is the PRE-seek
+                            // value — publishing it reverted the UI to
+                            // the exact pre-gesture position (BUG-2).
+                            val positionMs =
+                                pendingSeeks.resolve(
+                                    p.currentPosition,
+                                    p.currentMediaItem?.mediaId,
+                                    SystemClock.elapsedRealtime(),
+                                )
+                            _state.update { it.copy(positionMs = positionMs, durationMs = p.duration.coerceAtLeast(0)) }
+                        }
+                        // Sleep countdown (F-05): publish the
+                        // remaining time from the tracker's deadline
+                        // so the chip and the actual stop share one
+                        // truth and survive collapse/reopen.
+                        if (sleepTimer.isArmed) {
+                            val remaining = sleepTimer.remainingMs(SystemClock.elapsedRealtime())
+                            _state.update { it.copy(sleepRemainingMs = remaining) }
+                        }
+                        // Periodic session persist while playing
+                        // (F-16): ~every 10 s, so the resume point
+                        // stays fresh without hammering DataStore.
+                        ticks++
+                        if (ticks % 20 == 0 && p.isPlaying && pendingRestore == null) {
+                            persistSession()
+                        }
                     }
                     delay(500)
                 }
@@ -151,6 +283,7 @@ data class PlayerState(
             // EVERY track start — auto-advance, next/prev, queue
             // taps — not just the row-tap path that used to record.
             playStartTracker.onObservedCurrent(newCurrent)?.let { _playStarts.tryEmit(it) }
+            val currentChanged = newCurrent?.id != snapshot.current?.id
             _state.update {
                 it.copy(
                     current = newCurrent,
@@ -171,6 +304,9 @@ data class PlayerState(
                         if (p.playbackState == Player.STATE_READY) null else it.errorMessage,
                 )
             }
+            // A new current track is a persist point for the
+            // restorable session (F-16).
+            if (currentChanged) persistSession()
         }
 
         /** Stream quality of the most recent [playQueue]; reused by [insertNext]. */
@@ -211,6 +347,8 @@ data class PlayerState(
                 controller ?: return
             lastQuality = quality
             pendingSeeks.clear()
+            // A fresh queue supersedes any restored session (F-16).
+            pendingRestore = null
             // Keep the song beside its item: songs without a playable
             // URL drop out of the timeline, so the engine's start
             // index addresses the FILTERED list. Recording history
@@ -228,6 +366,7 @@ data class PlayerState(
             c.setMediaItems(pairs.map { it.second }, start.coerceAtLeast(0), 0L)
             c.prepare()
             c.play()
+            persistSession()
         }
 
         /**
@@ -251,9 +390,16 @@ data class PlayerState(
                 }
             val plan = planInsertNext(st.queue, currentIndex, song)
             controller?.let { c ->
-                mediaItemFor(song, lastQuality)?.let { item -> c.addMediaItem(plan.index, item) }
+                // With a restored session pending (F-16) the engine
+                // timeline doesn't exist yet; the insertion lives in
+                // state and is honored when the timeline is built
+                // from the published queue at materialization.
+                if (pendingRestore == null) {
+                    mediaItemFor(song, lastQuality)?.let { item -> c.addMediaItem(plan.index, item) }
+                }
             }
             _state.update { it.copy(queue = plan.queue) }
+            persistSession()
             return plan.result
         }
 
@@ -272,17 +418,35 @@ data class PlayerState(
 
         fun playPause() {
             val c = controller ?: return
-            if (c.isPlaying) c.pause() else c.play()
+            // First transport action after a cold-start restore
+            // (F-16): build the timeline at the saved index/position,
+            // then play from exactly there.
+            if (materializePendingRestore(c)) {
+                c.play()
+                return
+            }
+            if (c.isPlaying) {
+                c.pause()
+                // Pause is a persist point (F-16): the resume point
+                // is where the user actually stopped.
+                persistSession()
+            } else {
+                c.play()
+            }
         }
 
         fun next() {
             pendingSeeks.clear()
-            controller?.seekToNextMediaItem()
+            val c = controller ?: return
+            materializePendingRestore(c)
+            c.seekToNextMediaItem()
         }
 
         fun prev() {
             pendingSeeks.clear()
-            controller?.seekToPreviousMediaItem()
+            val c = controller ?: return
+            materializePendingRestore(c)
+            c.seekToPreviousMediaItem()
         }
 
         fun seekTo(ms: Long) {
@@ -295,6 +459,7 @@ data class PlayerState(
             pendingSeeks.onSeek(ms, c.currentMediaItem?.mediaId, SystemClock.elapsedRealtime())
             _state.update { it.copy(positionMs = ms) }
             c.seekTo(ms)
+            persistSession()
         }
 
         fun toggleShuffle() {
@@ -326,25 +491,43 @@ data class PlayerState(
 
         fun playIndex(i: Int) {
             pendingSeeks.clear()
-            controller?.seekTo(i, 0)
-            controller?.play()
+            val c = controller ?: return
+            materializePendingRestore(c)
+            c.seekTo(i, 0)
+            c.play()
             _state.update { it.copy(current = it.queue.getOrNull(i)) }
         }
 
-        // Sleep timer: simple coroutine cancelling playback after N minutes.
-        private var sleepJob: Job? = null
-
+        /**
+         * Arms ([minutes] > 0) or clears (0) the sleep timer and
+         * publishes the new truth in [PlayerState] (F-05). Expiry
+         * pauses playback and clears the published state, so what
+         * the UI shows and what the timer does can never disagree.
+         */
         fun setSleepTimer(minutes: Int) {
             sleepJob?.cancel()
-            if (minutes <=
-                0
-            ) {
+            val now = SystemClock.elapsedRealtime()
+            if (minutes <= 0) {
+                sleepTimer.cancel()
+                _state.update { it.copy(sleepMinutes = 0, sleepRemainingMs = 0) }
                 return
+            }
+            sleepTimer.arm(minutes, now)
+            _state.update {
+                it.copy(sleepMinutes = minutes, sleepRemainingMs = sleepTimer.remainingMs(now))
             }
             sleepJob =
                 scope.launch {
                     delay(minutes * 60_000L)
+                    sleepTimer.cancel()
+                    _state.update { it.copy(sleepMinutes = 0, sleepRemainingMs = 0) }
                     controller?.pause()
+                    persistSession()
                 }
+        }
+
+        /** The sleep button's whole behavior: cycle the preset (off → 15 → 30 → 60 → off). */
+        fun cycleSleepTimer() {
+            setSleepTimer(nextSleepPreset(sleepTimer.armedMinutes))
         }
     }

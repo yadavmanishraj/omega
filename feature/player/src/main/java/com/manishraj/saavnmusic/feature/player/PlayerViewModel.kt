@@ -71,15 +71,4 @@ class PlayerViewModel
         ) {
             viewModelScope.launch { onResult(repo.lyrics(id)) }
         }
-
-        fun suggestions(id: String) {
-            viewModelScope.launch {
-                try {
-                    val extra = repo.suggestions(id)
-                    if (extra.isNotEmpty()) player.playQueue(extra, 0, appSettings.value.streamQuality)
-                } catch (_: Exception) {
-                    // Suggestions are best-effort only; never disturb playback.
-                }
-            }
-        }
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.manishraj.saavnmusic.data.session.PlaybackSessionStore
 import com.manishraj.saavnmusic.data.settings.SettingsRepository
 import dagger.Module
 import dagger.Provides
@@ -30,4 +31,8 @@ object DataStoreModule {
     @Provides
     @Singleton
     fun settingsRepository(dataStore: DataStore<Preferences>): SettingsRepository = SettingsRepository(dataStore)
+
+    @Provides
+    @Singleton
+    fun playbackSessionStore(dataStore: DataStore<Preferences>): PlaybackSessionStore = PlaybackSessionStore(dataStore)
 }

@@ -514,19 +514,35 @@ fun AppRoot() {
                     bottomBar = {
                         Column {
                             miniPlayerBar()
-                            ShortNavigationBar {
-                                destinations.forEach { dest ->
-                                    ShortNavigationBarItem(
-                                        selected = tabRoute == dest.route,
-                                        onClick = { onDestinationClick(dest) },
-                                        icon = {
-                                            Icon(
-                                                if (tabRoute == dest.route) dest.selectedIcon else dest.icon,
-                                                contentDescription = dest.label,
-                                            )
-                                        },
-                                        label = { Text(dest.label, maxLines = 1, softWrap = false) },
-                                    )
+                            // F-22: the full player is the app's ONE
+                            // hero — while it is expanded the tab bar
+                            // hides with the same motion as the
+                            // mini-player, so the hero owns the whole
+                            // screen. (Rail mode keeps its rail: it
+                            // sits beside the hero, not beneath it.)
+                            // The snackbar host anchors above this
+                            // bottomBar slot either way, and the
+                            // predictive-back recession lives in the
+                            // content, untouched.
+                            AnimatedVisibility(
+                                visible = !showPlayer,
+                                enter = miniEnter,
+                                exit = miniExit,
+                            ) {
+                                ShortNavigationBar {
+                                    destinations.forEach { dest ->
+                                        ShortNavigationBarItem(
+                                            selected = tabRoute == dest.route,
+                                            onClick = { onDestinationClick(dest) },
+                                            icon = {
+                                                Icon(
+                                                    if (tabRoute == dest.route) dest.selectedIcon else dest.icon,
+                                                    contentDescription = dest.label,
+                                                )
+                                            },
+                                            label = { Text(dest.label, maxLines = 1, softWrap = false) },
+                                        )
+                                    }
                                 }
                             }
                         }
