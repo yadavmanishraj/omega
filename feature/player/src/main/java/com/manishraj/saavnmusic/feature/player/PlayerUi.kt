@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Bedtime
@@ -304,9 +306,18 @@ fun FullPlayer(
         Modifier
             .fillMaxSize()
             .background(playerBrush)
+            // Scrollable: at large font scales the fixed column
+            // overflowed and the speed chips were clipped out of
+            // the layout entirely (UI/UX Phase B audit — the chips
+            // existed in code but never composed on the phone).
+            .verticalScroll(rememberScrollState())
             .padding(OmegaSpacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // The palette content color covers the WHOLE player, not
+        // just the header: transport icons, time labels and section
+        // labels outside the provider fell back to theme colors
+        // and rendered dark-on-gradient in light theme.
         CompositionLocalProvider(LocalContentColor provides artworkContentColor) {
             Row(Modifier.fillMaxWidth()) {
                 IconButton(onClick = onBack) {
@@ -337,137 +348,137 @@ fun FullPlayer(
                 style = MaterialTheme.typography.bodyLarge,
                 color = artworkContentColor,
             )
-        }
-        Spacer(Modifier.height(OmegaSpacing.lg))
-        var scrub by remember { mutableStateOf<Float?>(null) }
-        Slider(
-            value =
-                scrub ?: if (st.durationMs > 0) {
-                    st.positionMs.toFloat() / st.durationMs
-                } else {
-                    0f
-                },
-            onValueChange = { scrub = it },
-            onValueChangeFinished = {
-                scrub?.let { vm.player.seekTo((it * st.durationMs).toLong()) }
-                scrub = null
-            },
-        )
-        Row(Modifier.fillMaxWidth()) {
-            Text(formatDuration(st.positionMs / 1000), style = TabularTimeStyle)
-            Spacer(Modifier.weight(1f))
-            Text(
-                formatDuration(if (st.durationMs > 0) st.durationMs / 1000 else cur.durationSec),
-                style = TabularTimeStyle,
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.player.toggleShuffle() }) {
-                Icon(
-                    Icons.Filled.Shuffle,
-                    contentDescription = if (st.shuffle) "Shuffle on" else "Shuffle off",
-                    tint = if (st.shuffle) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                )
-            }
-            IconButton(onClick = { vm.player.prev() }) {
-                Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp))
-            }
-            FilledIconButton(
-                onClick = { vm.player.playPause() },
-                modifier = Modifier.size(64.dp),
-                colors =
-                    IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-            ) {
-                Icon(
-                    if (st.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (st.isPlaying) "Pause" else "Play",
-                    modifier = Modifier.size(32.dp),
-                )
-            }
-            IconButton(onClick = { vm.player.next() }) {
-                Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
-            }
-            IconButton(onClick = { vm.player.cycleRepeat() }) {
-                Icon(
-                    if (st.repeatMode == 2) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
-                    contentDescription =
-                        when (st.repeatMode) {
-                            1 -> "Repeat all"
-                            2 -> "Repeat one"
-                            else -> "Repeat off"
-                        },
-                    tint = if (st.repeatMode != 0) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                )
-            }
-        }
-        Row {
-            IconButton(onClick = { vm.toggleFavorite(cur, fav) }) {
-                Icon(
-                    if (fav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = if (fav) "Remove from favorites" else "Add to favorites",
-                    tint = if (fav) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                )
-            }
-            IconButton(onClick = {
-                DownloadWorker.enqueue(WorkManager.getInstance(ctx), cur, vm.appSettings.value.downloadQuality)
-            }) {
-                Icon(Icons.Filled.Download, contentDescription = "Download")
-            }
-            IconButton(onClick = { showLyrics = !showLyrics }) {
-                Icon(Icons.Filled.Lyrics, contentDescription = "Lyrics")
-            }
-            IconButton(onClick = {
-                val next =
-                    when (sleep) {
-                        0 -> 15
-                        15 -> 30
-                        30 -> 60
-                        else -> 0
-                    }
-                sleep = next
-                vm.player.setSleepTimer(next)
-            }) {
-                Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
-            }
-            if (sleep > 0) {
-                Text(
-                    "${sleep}m",
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-        Text("Speed", style = MaterialTheme.typography.bodySmall)
-        // FlowRow so the chips wrap instead of overflowing on narrow
-        // screens / large font sizes (same bug as the settings chips).
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-            verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
-        ) {
-            listOf(0.75f, 1f, 1.25f, 1.5f).forEach { v ->
-                FilterChip(
-                    selected = st.speed == v,
-                    onClick = { vm.player.setSpeed(v) },
-                    label = { Text("${v}x", maxLines = 1, softWrap = false) },
-                )
-            }
-        }
-        if (showLyrics) {
-            Spacer(Modifier.height(OmegaSpacing.md))
-            Text(
-                text =
-                    when {
-                        lyrics != null -> lyrics!!
-                        !lyricsLoaded -> "Loading lyrics…"
-                        // The lyrics call is the test (validation §3):
-                        // a null result after it completes means none.
-                        else -> "No lyrics available for this song"
+            Spacer(Modifier.height(OmegaSpacing.lg))
+            var scrub by remember { mutableStateOf<Float?>(null) }
+            Slider(
+                value =
+                    scrub ?: if (st.durationMs > 0) {
+                        st.positionMs.toFloat() / st.durationMs
+                    } else {
+                        0f
                     },
-                style = MaterialTheme.typography.bodyMedium,
+                onValueChange = { scrub = it },
+                onValueChangeFinished = {
+                    scrub?.let { vm.player.seekTo((it * st.durationMs).toLong()) }
+                    scrub = null
+                },
             )
+            Row(Modifier.fillMaxWidth()) {
+                Text(formatDuration(st.positionMs / 1000), style = TabularTimeStyle)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    formatDuration(if (st.durationMs > 0) st.durationMs / 1000 else cur.durationSec),
+                    style = TabularTimeStyle,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { vm.player.toggleShuffle() }) {
+                    Icon(
+                        Icons.Filled.Shuffle,
+                        contentDescription = if (st.shuffle) "Shuffle on" else "Shuffle off",
+                        tint = if (st.shuffle) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
+                IconButton(onClick = { vm.player.prev() }) {
+                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp))
+                }
+                FilledIconButton(
+                    onClick = { vm.player.playPause() },
+                    modifier = Modifier.size(64.dp),
+                    colors =
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
+                    Icon(
+                        if (st.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (st.isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+                IconButton(onClick = { vm.player.next() }) {
+                    Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
+                }
+                IconButton(onClick = { vm.player.cycleRepeat() }) {
+                    Icon(
+                        if (st.repeatMode == 2) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
+                        contentDescription =
+                            when (st.repeatMode) {
+                                1 -> "Repeat all"
+                                2 -> "Repeat one"
+                                else -> "Repeat off"
+                            },
+                        tint = if (st.repeatMode != 0) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
+            }
+            Row {
+                IconButton(onClick = { vm.toggleFavorite(cur, fav) }) {
+                    Icon(
+                        if (fav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (fav) "Remove from favorites" else "Add to favorites",
+                        tint = if (fav) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
+                IconButton(onClick = {
+                    DownloadWorker.enqueue(WorkManager.getInstance(ctx), cur, vm.appSettings.value.downloadQuality)
+                }) {
+                    Icon(Icons.Filled.Download, contentDescription = "Download")
+                }
+                IconButton(onClick = { showLyrics = !showLyrics }) {
+                    Icon(Icons.Filled.Lyrics, contentDescription = "Lyrics")
+                }
+                IconButton(onClick = {
+                    val next =
+                        when (sleep) {
+                            0 -> 15
+                            15 -> 30
+                            30 -> 60
+                            else -> 0
+                        }
+                    sleep = next
+                    vm.player.setSleepTimer(next)
+                }) {
+                    Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
+                }
+                if (sleep > 0) {
+                    Text(
+                        "${sleep}m",
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Text("Speed", style = MaterialTheme.typography.bodySmall)
+            // FlowRow so the chips wrap instead of overflowing on narrow
+            // screens / large font sizes (same bug as the settings chips).
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
+            ) {
+                listOf(0.75f, 1f, 1.25f, 1.5f).forEach { v ->
+                    FilterChip(
+                        selected = st.speed == v,
+                        onClick = { vm.player.setSpeed(v) },
+                        label = { Text("${v}x", maxLines = 1, softWrap = false) },
+                    )
+                }
+            }
+            if (showLyrics) {
+                Spacer(Modifier.height(OmegaSpacing.md))
+                Text(
+                    text =
+                        when {
+                            lyrics != null -> lyrics!!
+                            !lyricsLoaded -> "Loading lyrics…"
+                            // The lyrics call is the test (validation §3):
+                            // a null result after it completes means none.
+                            else -> "No lyrics available for this song"
+                        },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
     if (showQueue) {
