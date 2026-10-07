@@ -73,7 +73,10 @@ fun songCountLabel(count: Int): String = if (count == 1) "1 song" else "$count s
  * dropped. (Raw interpolation rendered "107959415 followers".)
  */
 fun compactCount(count: Long): String {
-    fun scaled(value: Double, suffix: String): String {
+    fun scaled(
+        value: Double,
+        suffix: String,
+    ): String {
         val text = if (value % 1.0 == 0.0) value.toLong().toString() else String.format(java.util.Locale.US, "%.1f", value)
         return text + suffix
     }
