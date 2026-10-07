@@ -139,6 +139,10 @@ fun OmegaSnackbarHost(
             shape = MaterialTheme.shapes.large,
             containerColor = scheme.surfaceContainerHigh,
             contentColor = scheme.onSurface,
+            // material3 1.5.0-alpha29 colors the rendered action
+            // button from actionColor (default: inversePrimary);
+            // actionContentColor alone does not drive it.
+            actionColor = scheme.primary,
             actionContentColor = scheme.primary,
             dismissActionContentColor = scheme.onSurfaceVariant,
         )
