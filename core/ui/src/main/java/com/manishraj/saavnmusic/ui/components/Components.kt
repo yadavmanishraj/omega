@@ -420,11 +420,18 @@ fun EmptyState(
     }
 }
 
+/**
+ * Section title row. [emphasized] swaps the baseline style for the
+ * emphasized twin (M3 Expressive spec §2.2: weight, not size, carries
+ * the emphasis) — reserved for the ONE rail a calm screen promotes
+ * (Home's "Jump back in"); every other caller keeps the default.
+ */
 @Composable
 fun SectionHeader(
     title: String,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    emphasized: Boolean = false,
 ) {
     Row(
         Modifier
@@ -432,7 +439,16 @@ fun SectionHeader(
             .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        Text(
+            title,
+            style =
+                if (emphasized) {
+                    MaterialTheme.typography.titleMediumEmphasized
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
+            modifier = Modifier.weight(1f),
+        )
         if (actionLabel != null && onAction != null) {
             TextButton(onClick = onAction) { Text(actionLabel) }
         }
