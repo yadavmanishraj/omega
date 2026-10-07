@@ -1,5 +1,7 @@
 package com.manishraj.saavnmusic.ui.components
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -106,11 +108,39 @@ fun rememberOmegaSnackbarController(): OmegaSnackbarController {
     return remember(hostState, scope) { OmegaSnackbarController(hostState, scope) }
 }
 
-/** The host composable for the shell's Scaffold `snackbarHost` slot. */
+/**
+ * The host composable for the shell's Scaffold `snackbarHost` slot.
+ *
+ * The `snackbar` slot brands the bar (impeccable critique P1): the stock
+ * Material snackbar renders the inverse scheme — an off-white bar with
+ * a purple action in dark theme — which reads as a foreign app inside
+ * Omega's indigo/green system. Here the container is the same raised
+ * surface role the app's grouped surfaces use (`surfaceContainerHigh`
+ * in segmented lists, cards, and the search bar), the message takes
+ * its paired on-color, the action takes brand primary (green in both
+ * themes — the dynamic scheme keeps Omega's primary by theme rule),
+ * and the dismiss affordance recedes to `onSurfaceVariant`. Scheme
+ * roles only, so the bar tracks dark, light, and dynamic color with
+ * no per-theme branching. Presentation behavior (FIFO queue, durations)
+ * lives in [SnackbarPresenter] and is untouched by this styling.
+ */
 @Composable
 fun OmegaSnackbarHost(
     controller: OmegaSnackbarController,
     modifier: Modifier = Modifier,
 ) {
-    SnackbarHost(hostState = controller.hostState, modifier = modifier)
+    SnackbarHost(
+        hostState = controller.hostState,
+        modifier = modifier,
+    ) { data ->
+        val scheme = MaterialTheme.colorScheme
+        Snackbar(
+            snackbarData = data,
+            shape = MaterialTheme.shapes.large,
+            containerColor = scheme.surfaceContainerHigh,
+            contentColor = scheme.onSurface,
+            actionContentColor = scheme.primary,
+            dismissActionContentColor = scheme.onSurfaceVariant,
+        )
+    }
 }
