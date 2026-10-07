@@ -5,7 +5,6 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -674,21 +673,22 @@ fun FullPlayer(
             LazyColumn {
                 itemsIndexed(st.queue, key = { index, s -> "$index-${s.id}" }) { index, s ->
                     val isCurrent = index == currentIndex
-                    // Expressive ListItem (alpha29): the headline is
-                    // the trailing `content` lambda and selection is a
-                    // first-class state — the classic headlineContent
-                    // overload is deprecated.
+                    // Expressive ListItem (alpha29): the selectable
+                    // overload — headline is the trailing `content`
+                    // lambda, selection and click are first-class.
+                    // The classic headlineContent overload is
+                    // deprecated.
                     ListItem(
+                        selected = isCurrent,
+                        onClick = { vm.player.playIndex(index) },
                         modifier =
                             Modifier
                                 .animateItem()
-                                .clickable { vm.player.playIndex(index) }
                                 .semantics {
                                     if (isCurrent) {
                                         stateDescription = "Now playing"
                                     }
                                 },
-                        selected = isCurrent,
                         leadingContent = { Artwork(s.imageUrl, 44, OmegaRadius.md) },
                         trailingContent =
                             if (isCurrent) {
