@@ -146,15 +146,15 @@ fun AppRoot() {
         if (reducedMotion) {
             fadeIn(tween(OmegaMotion.FAST_MS))
         } else {
-            fadeIn(tween(enterMs, OmegaMotion.emphasizedDecelerate)) +
-                expandVertically(tween(enterMs, OmegaMotion.emphasizedDecelerate))
+            fadeIn(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate)) +
+                expandVertically(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate))
         }
     val miniExit =
         if (reducedMotion) {
             fadeOut(tween(OmegaMotion.FAST_MS))
         } else {
-            fadeOut(tween(exitMs, OmegaMotion.emphasizedAccelerate)) +
-                shrinkVertically(tween(exitMs, OmegaMotion.emphasizedAccelerate))
+            fadeOut(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate)) +
+                shrinkVertically(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate))
         }
     // While the player is open the NavHost is out of composition, so the
     // nav controller's own back handling is gone: system back collapses
@@ -221,8 +221,8 @@ fun AppRoot() {
                             fadeIn(tween(OmegaMotion.FAST_MS)) togetherWith
                                 fadeOut(tween(OmegaMotion.FAST_MS))
                         } else {
-                            fadeIn(tween(enterMs, OmegaMotion.emphasizedDecelerate)) togetherWith
-                                fadeOut(tween(exitMs, OmegaMotion.emphasizedAccelerate))
+                            fadeIn(tween(durationMillis = enterMs, easing = OmegaMotion.emphasizedDecelerate)) togetherWith
+                                fadeOut(tween(durationMillis = exitMs, easing = OmegaMotion.emphasizedAccelerate))
                         }
                     },
                     label = "playerExpand",
