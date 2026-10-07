@@ -87,8 +87,8 @@ fun OmegaActionGroup(
             onClick = onPrimary,
             shapes =
                 ButtonShapes(
-                    shape = ButtonGroupDefaults.ConnectedLeadingButtonShape,
-                    pressedShape = ButtonGroupDefaults.ConnectedLeadingButtonPressShape,
+                    shape = ButtonGroupDefaults.connectedLeadingButtonShape,
+                    pressedShape = ButtonGroupDefaults.connectedLeadingButtonPressShape,
                 ),
             contentPadding = ButtonDefaults.MediumContentPadding,
         ) {
@@ -101,8 +101,8 @@ fun OmegaActionGroup(
             onClick = onSecondary,
             shapes =
                 ButtonShapes(
-                    shape = ButtonGroupDefaults.ConnectedTrailingButtonShape,
-                    pressedShape = ButtonGroupDefaults.ConnectedTrailingButtonPressShape,
+                    shape = ButtonGroupDefaults.connectedTrailingButtonShape,
+                    pressedShape = ButtonGroupDefaults.connectedTrailingButtonPressShape,
                 ),
             contentPadding = ButtonDefaults.MediumContentPadding,
         ) {
