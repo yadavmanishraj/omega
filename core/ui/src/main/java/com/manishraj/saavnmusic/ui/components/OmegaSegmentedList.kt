@@ -101,9 +101,17 @@ fun OmegaSegmentedListItem(
         supportingContent =
             supporting?.let {
                 {
+                    // Supporting copy is sentence-length prose (a
+                    // setting's explanation), not a name: it gets two
+                    // lines so it wraps at large font scales instead
+                    // of truncating mid-word — at font 1.33 the
+                    // one-line cap cut "Surfaces follow your
+                    // wallpaper's colors" to "…wallpap…". The
+                    // headline above stays at one line: titles
+                    // ellipsize, explanations wrap.
                     Text(
                         it,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium,
                     )
