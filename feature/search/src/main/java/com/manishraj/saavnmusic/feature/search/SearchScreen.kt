@@ -24,19 +24,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.SearchOff
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -72,11 +75,6 @@ import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
 
-// NOTE: SearchBarInputField (the non-deprecated SearchBar API) does not
-// resolve against material3 1.3.1 (Compose BOM 2024.12.01) on the user's
-// toolchain, so this screen deliberately uses the deprecated
-// SearchBar(query, active, ...) overload until the BOM is bumped.
-@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
@@ -113,21 +111,33 @@ fun SearchScreen(
             topResults.isEmpty()
 
     Column(Modifier.fillMaxSize()) {
+        // Current SearchBar API (inputField overload +
+        // SearchBarDefaults.InputField): the deprecated
+        // SearchBar(query, active, ...) overload is gone. The bar
+        // is a permanent field, never an expandable search session —
+        // this screen drives results itself — so expanded is pinned
+        // false exactly as active=false was before.
         SearchBar(
-            query = query,
-            onQueryChange = { vm.onQueryChange(it) },
-            onSearch = { vm.search(query) },
-            active = false,
-            onActiveChange = {},
-            placeholder = { Text("Songs, albums, artists…") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { vm.onQueryChange("") }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                    }
-                }
+            inputField = {
+                SearchBarDefaults.InputField(
+                    query = query,
+                    onQueryChange = { vm.onQueryChange(it) },
+                    onSearch = { vm.search(query) },
+                    expanded = false,
+                    onExpandedChange = {},
+                    placeholder = { Text("Songs, albums, artists…") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { vm.onQueryChange("") }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                )
             },
+            expanded = false,
+            onExpandedChange = {},
             // Contained expressive field (spec §5): the bar sits in
             // the brightest container role with the shape language's
             // card radius instead of the stock docked pill.
@@ -158,7 +168,7 @@ fun SearchScreen(
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 Text(
-                    "You're offline — search needs a connection",
+                    "You're offline. Search needs a connection.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier =
@@ -207,17 +217,31 @@ fun SearchScreen(
                             }
                             // FlowRow: chips wrap the collection to the
                             // next line before any label is compressed
-                            // (chip-reflow rule).
+                            // (chip-reflow rule). Recents are Material
+                            // InputChips (spec §3): the trailing ✕ is the
+                            // component's own remove slot, so its target
+                            // sizing is the component's, not hand-rolled.
                             FlowRow(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
                                 verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
                             ) {
                                 recent.forEach { q ->
-                                    RecentChip(
-                                        query = q,
+                                    InputChip(
+                                        selected = false,
                                         onClick = { vm.search(q) },
-                                        onRemove = { vm.removeRecent(q) },
+                                        label = { Text(q, maxLines = 1, softWrap = false) },
+                                        trailingIcon = {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = "Remove '$q'",
+                                                modifier =
+                                                    Modifier
+                                                        .size(InputChipDefaults.IconSize)
+                                                        .clickable { vm.removeRecent(q) },
+                                            )
+                                        },
+                                        shape = InputChipDefaults.shape,
                                     )
                                 }
                             }
@@ -244,7 +268,7 @@ fun SearchScreen(
                             verticalArrangement = Arrangement.spacedBy(OmegaSpacing.sm),
                         ) {
                             listOf("Arijit Singh", "Lo-fi beats", "Punjabi hits", "Old Bollywood").forEach { starter ->
-                                AssistChip(
+                                SuggestionChip(
                                     onClick = { vm.search(starter) },
                                     label = { Text(starter, maxLines = 1, softWrap = false) },
                                 )
@@ -259,7 +283,7 @@ fun SearchScreen(
                 if (recent.isEmpty()) {
                     EmptyState(
                         title = "Search for music",
-                        subtitle = "Songs, albums, artists and playlists — no account needed.",
+                        subtitle = "Songs, albums, artists and playlists. No account needed.",
                         icon = Icons.Filled.Search,
                     )
                 }
@@ -303,6 +327,15 @@ fun SearchScreen(
                                 // top hit usually ALSO appears in the
                                 // songs list below — bare song-id keys
                                 // would collide inside one LazyColumn.
+                                // The repeat itself is DELIBERATE
+                                // (polish R-P3): the top result is a
+                                // distinct, entity-typed presentation
+                                // answering a "take me to the thing"
+                                // intent, while Songs below stays the
+                                // complete playable list. Deduping the
+                                // song out of Songs would silently make
+                                // the full list incomplete, so both
+                                // presentations keep it.
                                 itemsIndexed(
                                     topResults.take(3),
                                     key = { index, item -> "top-$index-${item.id}" },
@@ -458,6 +491,7 @@ fun SearchScreen(
                             items(artists) { a ->
                                 ListItem(
                                     leadingContent = { CircularArtwork(a.imageUrl, contentDescription = a.name) },
+                                    trailingContent = { EntityRowChevron() },
                                     modifier = Modifier.clickable { onArtist(a.id) },
                                 ) {
                                     Text(a.name, style = MaterialTheme.typography.titleMedium)
@@ -569,9 +603,23 @@ private fun SearchTabs(
 }
 
 /**
+ * Trailing affordance for entity rows: the row itself is the door,
+ * so the chevron only SIGNALS navigation. Decorative (null content
+ * description), never a separate action.
+ */
+@Composable
+private fun EntityRowChevron() {
+    Icon(
+        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+    )
+}
+
+/**
  * Row for a non-song top result (F-02): the same ListItem grammar as
  * the Artists tab — artwork, name, type line, the whole row
- * navigates. Deliberately NO overflow button: entity rows have no
+ * navigates, trailing chevron as the navigation affordance.
+ * Deliberately NO overflow button: entity rows have no
  * song menu, and the inert ⋮ was part of what made the old
  * force-mapped rows read as broken songs.
  */
@@ -594,6 +642,7 @@ private fun TopEntityRow(
                 Artwork(imageUrl, contentDescription = title)
             }
         },
+        trailingContent = { EntityRowChevron() },
         modifier = Modifier.clickable { onClick() },
     ) {
         Text(
@@ -602,39 +651,5 @@ private fun TopEntityRow(
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.titleMedium,
         )
-    }
-}
-
-/** Recent-search chip: tap searches; the ✕ removes just this entry. */
-@Composable
-private fun RecentChip(
-    query: String,
-    onClick: () -> Unit,
-    onRemove: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                query,
-                maxLines = 1,
-                softWrap = false,
-                style = MaterialTheme.typography.labelLarge,
-                modifier =
-                    Modifier
-                        .clickable { onClick() }
-                        .padding(start = OmegaSpacing.md, top = OmegaSpacing.sm, bottom = OmegaSpacing.sm),
-            )
-            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = "Remove '$query'",
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
     }
 }
