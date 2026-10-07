@@ -337,9 +337,10 @@ fun LibraryScreen(
                                                     style = MaterialTheme.typography.bodyMedium,
                                                 )
                                                 if (d.status == "FAILED") {
-                                                    if (!d.errorMessage.isNullOrBlank()) {
+                                                    val errorMessage = d.errorMessage
+                                                    if (!errorMessage.isNullOrBlank()) {
                                                         Text(
-                                                            d.errorMessage,
+                                                            errorMessage,
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.error,
                                                         )
