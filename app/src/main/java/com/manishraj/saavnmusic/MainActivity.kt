@@ -49,14 +49,17 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -71,6 +74,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavBackStackEntry
@@ -305,18 +309,46 @@ fun AppRoot() {
             // The mini-player slot, shared verbatim by both shell
             // modes: hidden while the full player is open (its own
             // surface replaces it), shared-element artwork otherwise.
+            // The slot carries the chrome divider (§4.3) on top of
+            // the mini-player — see the divider's own comment.
             val miniPlayerBar: @Composable () -> Unit = {
                 AnimatedVisibility(
                     visible = !showPlayer,
                     enter = miniEnter,
                     exit = miniExit,
                 ) {
-                    MiniPlayer(
-                        onOpen = { showPlayer = true },
-                        sharedTransitionScope = if (reducedMotion) null else sharedScope,
-                        animatedVisibilityScope = this,
-                        artworkBoundsTransform = artworkBoundsTransform,
-                    )
+                    // Captured before the Column wraps the content:
+                    // inside the Column, `this` is its ColumnScope,
+                    // but MiniPlayer needs this AnimatedVisibility's
+                    // scope for the shared-element flight.
+                    val visibilityScope = this
+                    Column {
+                        // Chrome divider (design spec §4.3): the
+                        // shell draws the hairline that separates
+                        // content from the chrome stack — full-bleed,
+                        // outlineVariant at 40% alpha. It lives in
+                        // this slot, NOT in PlayerUi's MiniPlayer, so
+                        // it enters and exits WITH the chrome: when
+                        // the full player expands the whole stack —
+                        // divider included — leaves, and no orphan
+                        // hairline strands under the hero. In rail
+                        // mode this same slot is the content
+                        // column's bottom chrome, so the divider
+                        // spans the mini-player's width there too.
+                        HorizontalDivider(
+                            thickness = Dp.Hairline,
+                            color =
+                                MaterialTheme.colorScheme.outlineVariant.copy(
+                                    alpha = CHROME_DIVIDER_ALPHA,
+                                ),
+                        )
+                        MiniPlayer(
+                            onOpen = { showPlayer = true },
+                            sharedTransitionScope = if (reducedMotion) null else sharedScope,
+                            animatedVisibilityScope = visibilityScope,
+                            artworkBoundsTransform = artworkBoundsTransform,
+                        )
+                    }
                 }
             }
             // The content column, shared verbatim by both shell modes:
@@ -495,12 +527,29 @@ fun AppRoot() {
             // Phone portrait stays structurally pixel-identical.
             if (LocalConfiguration.current.screenWidthDp >= MEDIUM_WIDTH_LOWER_BOUND_DP) {
                 Row(Modifier.fillMaxSize()) {
-                    NavigationRail {
+                    // Nav chrome colors are written out in full
+                    // (design spec §5.6): the rail and the bar are
+                    // ONE system — surfaceContainer chrome, the
+                    // secondary-family indicator (never primary, so
+                    // the accent budget holds). Nothing nav-shaped
+                    // ships unstyled (TELL-STOCK-DEFAULT).
+                    NavigationRail(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ) {
                         Spacer(Modifier.weight(1f))
                         destinations.forEach { dest ->
                             NavigationRailItem(
                                 selected = tabRoute == dest.route,
                                 onClick = { onDestinationClick(dest) },
+                                colors =
+                                    NavigationRailItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        selectedTextColor = MaterialTheme.colorScheme.secondary,
+                                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
                                 icon = {
                                     Icon(
                                         if (tabRoute == dest.route) dest.selectedIcon else dest.icon,
@@ -511,7 +560,14 @@ fun AppRoot() {
                                     if (iconOnlyNav) {
                                         null
                                     } else {
-                                        { Text(dest.label, maxLines = 1, softWrap = false) }
+                                        {
+                                            Text(
+                                                dest.label,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                            )
+                                        }
                                     },
                             )
                         }
@@ -557,11 +613,23 @@ fun AppRoot() {
                                 enter = miniEnter,
                                 exit = miniExit,
                             ) {
-                                ShortNavigationBar {
+                                ShortNavigationBar(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                ) {
                                     destinations.forEach { dest ->
                                         ShortNavigationBarItem(
                                             selected = tabRoute == dest.route,
                                             onClick = { onDestinationClick(dest) },
+                                            colors =
+                                                ShortNavigationBarItemDefaults.colors(
+                                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    selectedTextColorTopIconPosition = MaterialTheme.colorScheme.secondary,
+                                                    selectedTextColorStartIconPosition = MaterialTheme.colorScheme.secondary,
+                                                    selectedIndicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                ),
                                             icon = {
                                                 Icon(
                                                     if (tabRoute == dest.route) dest.selectedIcon else dest.icon,
@@ -572,7 +640,14 @@ fun AppRoot() {
                                                 if (iconOnlyNav) {
                                                     null
                                                 } else {
-                                                    { Text(dest.label, maxLines = 1, softWrap = false) }
+                                                    {
+                                                        Text(
+                                                            dest.label,
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            maxLines = 1,
+                                                            softWrap = false,
+                                                        )
+                                                    }
                                                 },
                                         )
                                     }
@@ -605,6 +680,12 @@ private const val MEDIUM_WIDTH_LOWER_BOUND_DP = 600
  * keep the destinations' names as content descriptions — carry
  * the items alone. */
 private const val ICON_ONLY_NAV_FONT_SCALE = 1.6f
+
+/** Chrome divider alpha (design spec §4.3): the hairline above
+ * the mini-player / nav chrome stack renders outlineVariant at
+ * 40% — present enough to separate content from chrome, quiet
+ * enough to stay chrome. */
+private const val CHROME_DIVIDER_ALPHA = 0.4f
 
 /** Shared-axis travel for pushes (spec §4.5): a few percent of the
  * width — these are reading surfaces, so amplitudes stay small. */
