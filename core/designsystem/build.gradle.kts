@@ -13,4 +13,7 @@ dependencies {
 
     // ProvideReducedMotion re-reads the animator scale on ON_RESUME.
     implementation(libs.androidx.lifecycle.runtime)
+
+    // ThemeCompletenessTest: the uplift spec's V1 completeness gate.
+    testImplementation(libs.junit)
 }
