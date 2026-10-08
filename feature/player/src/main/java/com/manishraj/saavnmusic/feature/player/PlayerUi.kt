@@ -950,7 +950,7 @@ private fun ColumnScope.PlayerControls(
         Column(Modifier.weight(1f)) {
             Text(
                 cur.name,
-                style = MaterialTheme.typography.headlineMedium,
+                style = OmegaType.masthead,
                 color = contentColor,
                 textAlign = TextAlign.Start,
                 maxLines = 2,
