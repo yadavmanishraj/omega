@@ -71,6 +71,7 @@ import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
+import com.manishraj.saavnmusic.ui.theme.OmegaType
 
 /** Library tab indices, in tab-bar order. Navigation deep-links use these. */
 const val LIBRARY_TAB_FAVORITES = 0
@@ -386,6 +387,15 @@ fun LibraryScreen(
                             ) {
                                 items(ordered, key = { it.songId }) { d ->
                                     OmegaSegmentedContainer(Modifier.animateItem()) {
+                                        // Downloads keeps the stock ListItem (uplift
+                                        // W3 D2): its supporting column — protected
+                                        // status slot, error block, progress — exceeds
+                                        // OmegaSegmentedListItem's String slots, so
+                                        // the kit grammar is made explicit here
+                                        // instead: transparent container (no default
+                                        // surface band inside the segment), the row
+                                        // tokens for title/meta, and the row
+                                        // family's 48dp artwork.
                                         ListItem(
                                             modifier =
                                                 if (d.status == "COMPLETED") {
@@ -420,7 +430,7 @@ fun LibraryScreen(
                                                                 .joinToString(" • "),
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis,
-                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            style = OmegaType.rowMeta,
                                                             modifier = Modifier.weight(1f, fill = false),
                                                         )
                                                         Text(
@@ -431,7 +441,7 @@ fun LibraryScreen(
                                                                     downloadStatusLabel(d.status)
                                                                 },
                                                             maxLines = 1,
-                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            style = OmegaType.rowMeta,
                                                             color =
                                                                 when (d.status) {
                                                                     "FAILED" -> MaterialTheme.colorScheme.error
@@ -483,7 +493,7 @@ fun LibraryScreen(
                                                     }
                                                 }
                                             },
-                                            leadingContent = { Artwork(d.imageUrl, contentDescription = d.name) },
+                                            leadingContent = { Artwork(d.imageUrl, size = 48, contentDescription = d.name) },
                                             trailingContent = {
                                                 // Downloads rows carry the shared
                                                 // song menu like every other song
@@ -531,9 +541,18 @@ fun LibraryScreen(
                                                 }
                                             },
                                             colors =
-                                                ListItemDefaults.colors(containerColor = Color.Transparent),
+                                                ListItemDefaults.colors(
+                                                    containerColor = Color.Transparent,
+                                                    headlineColor = MaterialTheme.colorScheme.onSurface,
+                                                    supportingColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                ),
                                         ) {
-                                            Text(d.name, maxLines = 1, style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                d.name,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = OmegaType.rowTitle,
+                                            )
                                         }
                                     }
                                 }
