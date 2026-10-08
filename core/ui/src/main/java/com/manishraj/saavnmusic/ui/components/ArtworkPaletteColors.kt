@@ -40,7 +40,11 @@ import kotlin.math.pow
  *   [mutedDark] lightness cap) as the input to [chromeTint] — the
  *   visual-uplift spec §3.2 chrome derivation. The v2 clamps apply to
  *   chrome only: the hero path ([mutedDark], the role views,
- *   [safeGradientEnd]) is deliberately NOT desaturated.
+ *   [safeGradientEnd]) is deliberately NOT desaturated. The one
+ *   exception is [playerGradientTop], a player-scoped derived view
+ *   (full-player redesign spec §2): the hero FIELDS stay raw; only
+ *   the full player's gradient top consumes the tempered view, so
+ *   Detail's half-hero renders exactly as before.
  *
  * Extraction runs off the main thread (Coil fetch + Palette on
  * [Dispatchers.Default]) and goes through the app's Coil singleton, so
@@ -136,6 +140,38 @@ data class ArtworkPaletteColors(
             alpha = sourceSwatch.alpha,
         )
     }
+
+    // -- Player hero gradient top (full-player redesign spec §2) -----
+    // The full player's backdrop is the app's one hero, but the raw
+    // hero derivation (darken, never desaturate) lets a saturated
+    // cover flood the screen — the Aashiqui-class maroon wash. This
+    // player-scoped view tempers the swatch BEFORE the lightness
+    // clamp: saturation scaled by [HERO_GRADIENT_SATURATION_SCALE]
+    // and capped at [HERO_GRADIENT_SATURATION_CAP], then lightness
+    // set exactly as [mutedDark]'s (<= 0.18). Hue is identity. The
+    // gradient's bottom stop is untouched: [safeGradientEnd] and the
+    // [onMutedDark] content-color selection keep operating on the raw
+    // fields, so their 4.5:1 guarantee is preserved exactly, and
+    // Detail's half-hero (which reads [mutedDark] directly) renders
+    // byte-identically.
+
+    /** The full player's gradient top: the selected swatch, tempered per §2. */
+    val playerGradientTop: Color
+        get() {
+            val hsl = sourceSwatch.toHsl()
+            val saturation =
+                min(
+                    hsl[1] * HERO_GRADIENT_SATURATION_SCALE,
+                    HERO_GRADIENT_SATURATION_CAP,
+                )
+            val lightness = min(hsl[2], MAX_GRADIENT_LIGHTNESS)
+            return hslToColor(
+                hue = hsl[0],
+                saturation = saturation,
+                lightness = lightness,
+                alpha = sourceSwatch.alpha,
+            )
+        }
 }
 
 /** HSL lightness cap for [ArtworkPaletteColors.mutedDark] (spec: L* <= 0.18). */
@@ -171,6 +207,12 @@ const val CHROME_WASH_ALPHA_LIGHT = 0.10f
  * §3.3: the artwork-side 40%).
  */
 const val CHROME_WASH_FRACTION = 0.40f
+
+/** Saturation scale for the player's hero gradient top (player spec §2: s × 0.6). */
+const val HERO_GRADIENT_SATURATION_SCALE = 0.6f
+
+/** Saturation cap for the player's hero gradient top (player spec §2: s' <= 0.50). */
+const val HERO_GRADIENT_SATURATION_CAP = 0.50f
 
 /** Minimum contrast for text over the artwork color (spec invariant: 4.5:1). */
 private const val MIN_TEXT_CONTRAST = 4.5f

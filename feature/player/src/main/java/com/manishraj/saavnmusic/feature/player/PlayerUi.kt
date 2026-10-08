@@ -4,11 +4,13 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,13 +51,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.IconButtonShapes
 import androidx.compose.material3.IconToggleButton
-import androidx.compose.material3.IconToggleButtonShapes
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
@@ -64,6 +65,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -81,16 +83,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.work.WorkManager
@@ -114,7 +120,7 @@ import com.manishraj.saavnmusic.ui.components.safeGradientEnd
 import com.manishraj.saavnmusic.ui.theme.OmegaMotion
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
-import com.manishraj.saavnmusic.ui.theme.TabularTimeStyle
+import com.manishraj.saavnmusic.ui.theme.OmegaType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -139,19 +145,6 @@ private val SPEED_OPTIONS: List<Float> = listOf(0.75f, 1f, 1.25f, 1.5f)
 
 /** The speed label format the old chip row used: "0.75x", "1.0x", "1.25x", "1.5x". */
 private fun speedLabel(v: Float): String = "${v}x"
-
-/**
- * Transport toggle shape morph (M3 Expressive spec §1.8 / §5): round
- * at rest, squared on press and while checked — the shape itself
- * reports the state, not just the tint. Shared by shuffle and repeat.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private val transportToggleShapes =
-    IconToggleButtonShapes(
-        shape = CircleShape,
-        pressedShape = RoundedCornerShape(8.dp),
-        checkedShape = RoundedCornerShape(8.dp),
-    )
 
 /**
  * The current song's artwork, shared between the mini-player and the
@@ -365,12 +358,26 @@ private class ScrubFlag {
  * value is clock data and springs are forbidden on it (spec §4.7).
  * TalkBack hears a time value text ("1:23 of 3:45") via
  * [stateDescription], closing the standing slider a11y gap.
+ *
+ * Redesign (player spec §5): the state wiring above is untouched,
+ * but the rendering is now specified, not library-default — the
+ * defaults drew a 4×44dp pill thumb (which also set the row's 44dp
+ * height) and a stray stop dot at the track's end. Thumb = a 16dp
+ * circle in `primary` (so the slider row is 16dp tall); track = a
+ * custom 4dp line drawn in the slot — active `primary`, inactive
+ * [contentColor] at 24% — with no stop indicator. The library's own
+ * Track cannot be used for this: in the pinned alpha29 it exposes no
+ * track-height parameter (its height is token-fixed). The active
+ * segment ends at the thumb center by the slider layout's own math:
+ * in track-local coordinates the thumb center sits at
+ * fraction × track width.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SeekBar(
     st: PlayerState,
     fallbackDurationSec: Long?,
+    contentColor: Color,
     onSeek: (Long) -> Unit,
 ) {
     val durationSec =
@@ -396,6 +403,8 @@ private fun SeekBar(
         }
     }
     val shownSec = (sliderState.value * durationSec).toLong()
+    val scheme = MaterialTheme.colorScheme
+    val inactiveTrackColor = contentColor.copy(alpha = 0.24f)
     Slider(
         state = sliderState,
         onValueChange = {
@@ -408,6 +417,61 @@ private fun SeekBar(
             // still be 0 (unknown) while the fallback is known, and
             // fraction × 0 silently seeked to 0:00.
             onSeek((sliderState.value * durationSec * 1000).toLong())
+        },
+        colors =
+            SliderDefaults.colors(
+                thumbColor = scheme.primary,
+                activeTrackColor = scheme.primary,
+                inactiveTrackColor = inactiveTrackColor,
+            ),
+        thumb = {
+            Box(
+                Modifier
+                    .size(16.dp)
+                    .background(scheme.primary, CircleShape),
+            )
+        },
+        track = { state ->
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+            ) {
+                val range = state.trackRange
+                val span = range.endInclusive - range.start
+                val fraction =
+                    if (span > 0f) {
+                        ((state.value - range.start) / span).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                val centerY = size.height / 2f
+                drawLine(
+                    color = inactiveTrackColor,
+                    start = Offset(0f, centerY),
+                    end = Offset(size.width, centerY),
+                    strokeWidth = size.height,
+                    cap = StrokeCap.Round,
+                )
+                if (fraction > 0f) {
+                    val activeStart: Offset
+                    val activeEnd: Offset
+                    if (layoutDirection == LayoutDirection.Rtl) {
+                        activeStart = Offset(size.width * (1f - fraction), centerY)
+                        activeEnd = Offset(size.width, centerY)
+                    } else {
+                        activeStart = Offset(0f, centerY)
+                        activeEnd = Offset(size.width * fraction, centerY)
+                    }
+                    drawLine(
+                        color = scheme.primary,
+                        start = activeStart,
+                        end = activeEnd,
+                        strokeWidth = size.height,
+                        cap = StrokeCap.Round,
+                    )
+                }
+            }
         },
         modifier =
             Modifier.semantics {
@@ -423,14 +487,22 @@ private fun SeekBar(
 }
 
 /**
- * Full player (spec §5): THE hero surface. Title in
- * displaySmallEmphasized, the play button is the screen's single
- * primary CTA (palette rolePrimary fill, 72dp, press shape morph),
- * shuffle/repeat are expressive toggle buttons whose state is carried
- * by shape + [stateDescription] (not tint alone), and the secondary
- * cluster (favorite/download/lyrics/sleep/speed) is de-emphasized
- * below them. Time labels use tabular figures; queue is a sheet with
- * a "Queue" header.
+ * Full player (player-redesign spec): THE hero surface, and the one
+ * screen where the artwork palette still speaks — in the background
+ * gradient only. The gradient top is the tempered player-scoped
+ * derivation (ArtworkPaletteColors.playerGradientTop, §2); its end
+ * is the byte-unchanged `safeGradientEnd`, so the content color
+ * keeps its 4.5:1 guarantee. No control consumes a palette color
+ * (§1, the one-accent rule): the 72dp play/pause disc is
+ * `primary`/`onPrimary` — the screen's single accent moment — and
+ * every other control speaks in the gradient content color, with
+ * armed states in `primary`. The composition bottom-anchors the
+ * control cluster inside a min-height column in the scroll
+ * viewport (§3), so the resting screen has no dead void while
+ * lyrics and large font scales still scroll. Shuffle/repeat state
+ * is carried by tint + stateDescription (not shape), favorite
+ * lives in the info block (§4), and the secondary cluster is four
+ * labeled quick actions (§7).
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -479,39 +551,29 @@ fun FullPlayer(
     LaunchedEffect(st.errorSeq) {
         vm.markErrorPresented(st.errorSeq)
     }
-    // Artwork gradient (UIUX_DESIGN §3.1.3): mutedDark at the top
-    // crossfading on the shared palette helper (spec §4.4) on track
-    // change, theme background at the bottom. Header text/icons sit
-    // on the artwork color, so they use the palette's
-    // contrast-checked on-color in both themes.
+    // Artwork gradient (player spec §2): the top stop is the
+    // player-scoped tempered derivation — saturation scaled and
+    // capped before the lightness clamp, so a saturated cover no
+    // longer floods the hero (the mini-player's chrome lesson) —
+    // crossfading on the shared palette helper on track change.
+    // Header text/icons sit on the artwork color, so they use the
+    // palette's contrast-checked on-color in both themes. Detail's
+    // half-hero reads palette.mutedDark directly and is untouched
+    // by this derivation.
     val palette = rememberArtworkPalette(cur.imageUrl)
     val gradientTop by animatePaletteColor(
-        targetValue = palette.mutedDark,
+        targetValue = palette.playerGradientTop,
         label = "playerGradientTop",
     )
     val artworkContentColor by animatePaletteColor(
         targetValue = palette.onMutedDark,
         label = "playerArtworkContent",
     )
-    // Palette ROLE colors (spec §1.3/§2.4): the play fill is the
-    // artwork's primary role; active toggles and the downloaded state
-    // speak in the tertiary role — no raw vibrant/dominant at call
-    // sites.
-    val playFill by animatePaletteColor(
-        targetValue = palette.rolePrimary,
-        label = "playerPlayFill",
-    )
-    val playContent by animatePaletteColor(
-        targetValue = palette.onRolePrimary,
-        label = "playerPlayContent",
-    )
-    val tertiaryAccent by animatePaletteColor(
-        targetValue = palette.roleTertiary,
-        label = "playerTertiaryAccent",
-    )
     // Fade end must keep the content color at 4.5:1 (see
     // safeGradientEnd) — in light themes the title/artist washed
     // out over the near-white background end (UI/UX Phase B audit).
+    // Byte-unchanged: it and the content-color selection above keep
+    // operating on the raw palette fields.
     val gradientEnd by animatePaletteColor(
         targetValue = safeGradientEnd(palette, MaterialTheme.colorScheme.background),
         label = "playerGradientEnd",
@@ -537,10 +599,12 @@ fun FullPlayer(
             }
         }
     }
-    // The controls cluster (title → lyrics), shared verbatim by the
+    // The controls cluster (info → lyrics), shared verbatim by the
     // portrait column and the landscape split's controls pane: one
-    // implementation, two placements.
-    val controls: @Composable () -> Unit = {
+    // implementation, two placements. The ColumnScope receiver is
+    // what lets the cluster bottom-anchor itself with a weighted
+    // spacer inside each pane's min-height column (spec §3).
+    val controls: @Composable ColumnScope.() -> Unit = {
         PlayerControls(
             vm = vm,
             onDownloadEnqueued = onDownloadEnqueued,
@@ -549,9 +613,6 @@ fun FullPlayer(
             isFavorite = fav,
             isDownloaded = downloaded,
             contentColor = artworkContentColor,
-            playFill = playFill,
-            playContent = playContent,
-            tertiaryAccent = tertiaryAccent,
             showLyrics = showLyrics,
             onToggleLyrics = { showLyrics = !showLyrics },
             lyrics = lyrics,
@@ -587,7 +648,7 @@ fun FullPlayer(
                     ) {
                         SharedArtwork(
                             song = cur,
-                            size = minOf(maxWidth, maxHeight).value.toInt().coerceAtMost(300),
+                            size = minOf(maxWidth, maxHeight).value.toInt().coerceAtMost(340),
                             corner = OmegaRadius.xl,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -607,8 +668,20 @@ fun FullPlayer(
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        PlayerTopBar(onBack = onBack, onShowQueue = { showQueue = true })
-                        controls()
+                        // Min-height content column (player spec
+                        // §3): the pane's weighted spacer can only
+                        // distribute against a floor, and a
+                        // scrollable column's height is its content
+                        // — so the floor is the pane height (outer
+                        // height minus its xl padding), and taller
+                        // content simply grows past it and scrolls.
+                        Column(
+                            Modifier.heightIn(min = maxHeight - OmegaSpacing.xl * 2),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            PlayerTopBar(onBack = onBack, onShowQueue = { showQueue = true })
+                            controls()
+                        }
                     }
                 }
             } else {
@@ -623,17 +696,34 @@ fun FullPlayer(
                         .padding(OmegaSpacing.xl),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    PlayerTopBar(onBack = onBack, onShowQueue = { showQueue = true })
-                    SharedArtwork(
-                        song = cur,
-                        size = 300,
-                        corner = OmegaRadius.xl,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        artworkBoundsTransform = artworkBoundsTransform,
-                    )
-                    Spacer(Modifier.height(OmegaSpacing.xl))
-                    controls()
+                    // Min-height content column (player spec §3):
+                    // see the landscape pane — the floor is the
+                    // padded viewport height; the weighted spacer
+                    // inside the controls anchors the seek →
+                    // secondary cluster to the bottom, so the only
+                    // space below the secondary row is the column's
+                    // own 24dp bottom padding.
+                    Column(
+                        Modifier.heightIn(min = maxHeight - OmegaSpacing.xl * 2),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        PlayerTopBar(onBack = onBack, onShowQueue = { showQueue = true })
+                        Spacer(Modifier.height(OmegaSpacing.xl))
+                        SharedArtwork(
+                            song = cur,
+                            size =
+                                minOf(maxWidth - OmegaSpacing.xl * 2, 340.dp)
+                                    .value
+                                    .toInt()
+                                    .coerceAtLeast(0),
+                            corner = OmegaRadius.xl,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            artworkBoundsTransform = artworkBoundsTransform,
+                        )
+                        Spacer(Modifier.height(OmegaSpacing.xxl))
+                        controls()
+                    }
                 }
             }
         }
@@ -807,21 +897,24 @@ private fun QueueRowMenu(
 }
 
 /**
- * The full player's controls cluster: title/artist, the error row,
- * the expressive seek bar + time row, the transport row, the
- * de-emphasized secondary cluster (favorite / download / lyrics /
- * sleep / speed — sleep and speed open preset menus instead of
- * spending permanent chrome), and the inline lyrics block.
- * Extracted verbatim from the portrait column (Wave 3) so the
- * landscape split's controls pane renders the SAME controls driven
- * by the SAME state — no behavior lives here that the portrait path
- * doesn't share. [vm] carries the player/library actions; the sleep
- * timer reads [st] directly (its truth is the controller's, F-05);
- * lyrics visibility and payload arrive as values + callbacks.
+ * The full player's controls cluster: the info block (title/artist
+ * with favorite promoted beside them, §4), the always-reserved
+ * error slot, the seek group (explicitly styled slider + buffering
+ * slot + times, §5), the distributed transport row (§6), the
+ * secondary cluster of labeled quick actions — Download / Lyrics /
+ * Sleep / Speed (§7) — and the inline lyrics block (§8). The
+ * [ColumnScope] receiver carries the §3 bottom-anchoring: a
+ * weighted spacer above the seek group absorbs the min-height
+ * column's remainder, so the cluster rests at the bottom and the
+ * error slot's reservation never moves it. [vm] carries the
+ * player/library actions; the sleep timer reads [st] directly (its
+ * truth is the controller's, F-05); lyrics visibility and payload
+ * arrive as values + callbacks. Every callback, menu, and state
+ * flow is the pre-redesign wiring — only the presentation changed.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun PlayerControls(
+private fun ColumnScope.PlayerControls(
     vm: PlayerViewModel,
     onDownloadEnqueued: () -> Unit,
     st: PlayerState,
@@ -829,9 +922,6 @@ private fun PlayerControls(
     isFavorite: Boolean,
     isDownloaded: Boolean,
     contentColor: Color,
-    playFill: Color,
-    playContent: Color,
-    tertiaryAccent: Color,
     showLyrics: Boolean,
     onToggleLyrics: () -> Unit,
     lyrics: String?,
@@ -839,71 +929,141 @@ private fun PlayerControls(
 ) {
     val ctx = LocalContext.current
     val snackbar = LocalOmegaSnackbar.current
-    Text(
-        cur.name,
-        style = MaterialTheme.typography.displaySmallEmphasized,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
-    Text(
-        cur.artist,
-        style = MaterialTheme.typography.titleMedium,
-        color = contentColor,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
-    if (st.errorMessage != null) {
-        Spacer(Modifier.height(OmegaSpacing.sm))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Filled.ErrorOutline,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(OmegaSpacing.xs))
+    val scheme = MaterialTheme.colorScheme
+    // Secondary text on this screen (artist, times, quick-action
+    // labels) is the gradient content color at 70% (spec §1);
+    // control glyphs and the title use it at full strength.
+    val secondaryContentColor = contentColor.copy(alpha = 0.7f)
+    // Info block (§4): real start alignment — the old title's
+    // apparent centering was the column centering a wrap-width text
+    // box — with favorite promoted to a 48dp button trailing the
+    // text column, centered against title + artist.
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
             Text(
-                "Couldn't play. Check your connection.",
-                style = MaterialTheme.typography.bodySmall,
+                cur.name,
+                style = MaterialTheme.typography.headlineMedium,
+                color = contentColor,
+                textAlign = TextAlign.Start,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
-            TextButton(onClick = { vm.player.retry() }) {
-                Text("Retry")
+            Spacer(Modifier.height(OmegaSpacing.xs))
+            Text(
+                cur.artist,
+                style = MaterialTheme.typography.bodyLarge,
+                color = secondaryContentColor,
+                textAlign = TextAlign.Start,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        IconButton(
+            onClick = { vm.toggleFavorite(cur, isFavorite) },
+            modifier =
+                Modifier.semantics {
+                    stateDescription = if (isFavorite) "Favorite on" else "Favorite off"
+                },
+        ) {
+            OmegaFavoriteIcon(
+                isFavorite = isFavorite,
+                tint = if (isFavorite) scheme.primary else secondaryContentColor,
+            )
+        }
+    }
+    // Error slot (§5): the height is reserved ALWAYS — the slot is
+    // 48dp whether or not an error is showing (the row's own height
+    // at font 1.0/1.33: the 40dp Retry button, or two wrapped text
+    // lines, both fit inside it) — so an error appearing or clearing
+    // shifts nothing below it. The row itself (message + Retry
+    // wiring) is unchanged.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (st.errorMessage != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.ErrorOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(OmegaSpacing.xs))
+                Text(
+                    "Couldn't play. Check your connection.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { vm.player.retry() }) {
+                    Text("Retry")
+                }
             }
         }
     }
-    Spacer(Modifier.height(OmegaSpacing.lg))
+    // §3 rhythm: a fixed 28dp gap, then the flexible space — the
+    // remainder pools ABOVE the seek group, never below the
+    // secondary row.
+    Spacer(Modifier.height(28.dp))
+    Spacer(Modifier.weight(1f))
     SeekBar(
         st = st,
         fallbackDurationSec = cur.durationSec,
+        contentColor = contentColor,
         onSeek = { vm.player.seekTo(it) },
     )
     // Fixed-height buffering slot under the slider: the wavy
     // strip (spec §3 — the wave belongs on media surfaces)
     // appears while buffering without shifting the time row.
+    // It doubles as the §5 times gap: its 4dp is the space
+    // between the slider and the times row in both states.
     Box(
         Modifier
             .fillMaxWidth()
             .height(4.dp),
     ) {
         if (st.isBuffering) {
-            LinearWavyProgressIndicator(Modifier.fillMaxWidth())
+            LinearWavyProgressIndicator(
+                color = scheme.primary,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
     Row(Modifier.fillMaxWidth()) {
-        Text(formatDuration(st.positionMs / 1000), style = TabularTimeStyle)
+        Text(
+            formatDuration(st.positionMs / 1000),
+            style = OmegaType.rowMeta,
+            color = secondaryContentColor,
+        )
         Spacer(Modifier.weight(1f))
         Text(
             formatDuration(if (st.durationMs > 0) st.durationMs / 1000 else cur.durationSec),
-            style = TabularTimeStyle,
+            style = OmegaType.rowMeta,
+            color = secondaryContentColor,
         )
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Spacer(Modifier.height(20.dp))
+    // Transport (§6): distributed across the full content width
+    // instead of a centered wrap block — 48/56/72/56/48 targets.
+    // Armed shuffle/repeat read by primary tint + stateDescription;
+    // the palette-tertiary tint and the shape morph are gone (§1).
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         IconToggleButton(
             checked = st.shuffle,
             onCheckedChange = { vm.player.toggleShuffle() },
-            shapes = transportToggleShapes,
             colors =
                 IconButtonDefaults.iconToggleButtonColors(
-                    checkedContentColor = tertiaryAccent,
+                    checkedContentColor = scheme.primary,
+                    uncheckedContentColor = contentColor,
                 ),
             modifier =
                 Modifier.semantics {
@@ -912,8 +1072,11 @@ private fun PlayerControls(
         ) {
             Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle")
         }
-        IconButton(onClick = { vm.player.prev() }) {
-            Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp))
+        IconButton(
+            onClick = { vm.player.prev() },
+            modifier = Modifier.size(56.dp),
+        ) {
+            Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(32.dp))
         }
         FilledIconButton(
             onClick = { vm.player.playPause() },
@@ -925,14 +1088,17 @@ private fun PlayerControls(
                 ),
             colors =
                 IconButtonDefaults.filledIconButtonColors(
-                    containerColor = playFill,
-                    contentColor = playContent,
+                    containerColor = scheme.primary,
+                    contentColor = scheme.onPrimary,
                 ),
         ) {
-            OmegaPlayPauseIcon(isPlaying = st.isPlaying, modifier = Modifier.size(36.dp))
+            OmegaPlayPauseIcon(isPlaying = st.isPlaying, modifier = Modifier.size(28.dp))
         }
-        IconButton(onClick = { vm.player.next() }) {
-            Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
+        IconButton(
+            onClick = { vm.player.next() },
+            modifier = Modifier.size(56.dp),
+        ) {
+            Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(32.dp))
         }
         // st.repeatMode is the ENGINE value — interpret it ONLY via
         // the RepeatMode mapping. Reading the raw Int here is what
@@ -941,10 +1107,10 @@ private fun PlayerControls(
         IconToggleButton(
             checked = repeat != RepeatMode.OFF,
             onCheckedChange = { vm.player.cycleRepeat() },
-            shapes = transportToggleShapes,
             colors =
                 IconButtonDefaults.iconToggleButtonColors(
-                    checkedContentColor = tertiaryAccent,
+                    checkedContentColor = scheme.primary,
+                    uncheckedContentColor = contentColor,
                 ),
             modifier =
                 Modifier.semantics {
@@ -962,102 +1128,110 @@ private fun PlayerControls(
             )
         }
     }
-    Row {
-        IconButton(
-            onClick = { vm.toggleFavorite(cur, isFavorite) },
-            modifier =
-                Modifier.semantics {
-                    stateDescription = if (isFavorite) "Favorite on" else "Favorite off"
+    Spacer(Modifier.height(OmegaSpacing.xl))
+    // Secondary cluster (§7): four labeled quick actions in
+    // fixed-weight slots — the slot width never changes, so a
+    // ticking sleep countdown or a speed change moves nothing.
+    // State reads through icon + label tint (primary when armed),
+    // never a chip: the 36dp armed chips and their per-second
+    // reflow are deleted. Favorite lives in the info block now (§4).
+    var sleepMenuOpen by remember { mutableStateOf(false) }
+    var speedMenuOpen by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth()) {
+        PlayerQuickAction(
+            label = "Download",
+            active = isDownloaded,
+            contentColor = contentColor,
+            modifier = Modifier.weight(1f),
+        ) {
+            IconButton(
+                onClick = {
+                    if (!isDownloaded) {
+                        DownloadWorker.enqueue(
+                            WorkManager.getInstance(ctx),
+                            cur,
+                            vm.appSettings.value.downloadQuality,
+                        )
+                        onDownloadEnqueued()
+                    } else {
+                        // State-aware (F-09): tapping the downloaded
+                        // state says so instead of silently doing
+                        // nothing.
+                        snackbar?.showMessage("Already downloaded")
+                    }
                 },
-        ) {
-            OmegaFavoriteIcon(
-                isFavorite = isFavorite,
-                tint = if (isFavorite) tertiaryAccent else LocalContentColor.current,
-            )
+            ) {
+                Icon(
+                    if (isDownloaded) Icons.Filled.DownloadDone else Icons.Filled.Download,
+                    contentDescription = if (isDownloaded) "Downloaded" else "Download",
+                    tint = if (isDownloaded) scheme.primary else contentColor,
+                )
+            }
         }
-        IconButton(
-            onClick = {
-                if (!isDownloaded) {
-                    DownloadWorker.enqueue(
-                        WorkManager.getInstance(ctx),
-                        cur,
-                        vm.appSettings.value.downloadQuality,
-                    )
-                    onDownloadEnqueued()
-                } else {
-                    // State-aware (F-09): tapping the downloaded
-                    // state says so instead of silently doing
-                    // nothing.
-                    snackbar?.showMessage("Already downloaded")
-                }
-            },
+        PlayerQuickAction(
+            label = "Lyrics",
+            active = showLyrics,
+            contentColor = contentColor,
+            modifier = Modifier.weight(1f),
         ) {
-            Icon(
-                if (isDownloaded) Icons.Filled.DownloadDone else Icons.Filled.Download,
-                contentDescription = if (isDownloaded) "Downloaded" else "Download",
-                tint = if (isDownloaded) tertiaryAccent else LocalContentColor.current,
-            )
+            // Lyrics is a toggle and must LOOK like one (F-09): the
+            // open state tints icon and label primary (§7); TalkBack
+            // hears the state too (F-10). The old tonal checked
+            // container is gone — the unit grammar has no container.
+            IconToggleButton(
+                checked = showLyrics,
+                onCheckedChange = { onToggleLyrics() },
+                colors =
+                    IconButtonDefaults.iconToggleButtonColors(
+                        checkedContainerColor = Color.Transparent,
+                        checkedContentColor = scheme.primary,
+                        uncheckedContainerColor = Color.Transparent,
+                        uncheckedContentColor = contentColor,
+                    ),
+                modifier =
+                    Modifier.semantics {
+                        stateDescription = if (showLyrics) "Lyrics on" else "Lyrics off"
+                    },
+            ) {
+                Icon(Icons.Filled.Lyrics, contentDescription = "Lyrics")
+            }
         }
-        // Lyrics is a toggle and must LOOK like one (F-09): while
-        // the lyrics block is shown the button carries the tonal
-        // selected container; TalkBack hears the state too (F-10).
-        IconToggleButton(
-            checked = showLyrics,
-            onCheckedChange = { onToggleLyrics() },
-            colors =
-                IconButtonDefaults.iconToggleButtonColors(
-                    checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    checkedContentColor = tertiaryAccent,
-                ),
-            modifier =
-                Modifier.semantics {
-                    stateDescription = if (showLyrics) "Lyrics on" else "Lyrics off"
-                },
-        ) {
-            Icon(Icons.Filled.Lyrics, contentDescription = "Lyrics")
-        }
-        // Sleep timer, de-emphasized in the secondary cluster:
-        // a plain icon while off; once armed it becomes a tonal
-        // chip carrying the live countdown. Both render from
-        // PlayerState (F-05) — the controller's armed preset and
-        // remaining time — so the control survives collapse/reopen
-        // and agrees with the timer that will actually fire.
-        // Tapping either form opens the preset MENU (Task 4): the
-        // choices are finally visible and selection is direct —
-        // the old tap silently CYCLED presets, so exploring the
-        // control changed the commitment instead of revealing it.
-        var sleepMenuOpen by remember { mutableStateOf(false) }
-        Box(Modifier.align(Alignment.CenterVertically)) {
-            if (st.sleepMinutes > 0) {
-                FilledTonalButton(
-                    onClick = { sleepMenuOpen = true },
-                    contentPadding =
-                        PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
-                    modifier =
-                        Modifier
-                            .height(36.dp)
-                            .semantics {
-                                stateDescription =
-                                    "Sleep timer, ${formatDuration(st.sleepRemainingMs / 1000)} left"
-                            },
-                ) {
-                    Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer", modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(OmegaSpacing.xs))
-                    Text(
-                        "${formatDuration(st.sleepRemainingMs / 1000)} left",
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-            } else {
+        // Sleep timer: a labeled unit in both states — the menu is
+        // the same preset menu as before (Task 4), and both the
+        // armed preset and the countdown still read from
+        // PlayerState (F-05), so the control survives
+        // collapse/reopen and agrees with the timer that fires.
+        // Armed, the label IS the remaining time, updating in
+        // place inside the fixed slot.
+        Box(Modifier.weight(1f)) {
+            PlayerQuickAction(
+                label =
+                    if (st.sleepMinutes > 0) {
+                        formatDuration(st.sleepRemainingMs / 1000)
+                    } else {
+                        "Sleep"
+                    },
+                active = st.sleepMinutes > 0,
+                contentColor = contentColor,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 IconButton(
                     onClick = { sleepMenuOpen = true },
                     modifier =
                         Modifier.semantics {
-                            stateDescription = "Sleep timer off"
+                            stateDescription =
+                                if (st.sleepMinutes > 0) {
+                                    "Sleep timer, ${formatDuration(st.sleepRemainingMs / 1000)} left"
+                                } else {
+                                    "Sleep timer off"
+                                }
                         },
                 ) {
-                    Icon(Icons.Filled.Bedtime, contentDescription = "Sleep timer")
+                    Icon(
+                        Icons.Filled.Bedtime,
+                        contentDescription = "Sleep timer",
+                        tint = if (st.sleepMinutes > 0) scheme.primary else contentColor,
+                    )
                 }
             }
             DropdownMenu(
@@ -1084,15 +1258,18 @@ private fun PlayerControls(
                 }
             }
         }
-        // Playback speed, same disclosure pattern as sleep (Task 4):
-        // the permanent 4-chip row is gone. At 1.0x this is a plain
-        // icon in the secondary cluster; off 1.0x it becomes a tonal
-        // chip carrying the current value, so the state is visible
-        // without opening anything. Either form opens the choice
-        // menu; the state description always announces the speed.
-        var speedMenuOpen by remember { mutableStateOf(false) }
-        Box(Modifier.align(Alignment.CenterVertically)) {
-            if (st.speed == 1f) {
+        // Playback speed, same labeled-unit + menu pattern as
+        // sleep: at 1× the label reads "Speed"; off 1× it shows
+        // the rate and tints primary. The menu (and its labels)
+        // is unchanged; the state description always announces
+        // the speed.
+        Box(Modifier.weight(1f)) {
+            PlayerQuickAction(
+                label = if (st.speed == 1f) "Speed" else "${st.speed}×",
+                active = st.speed != 1f,
+                contentColor = contentColor,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 IconButton(
                     onClick = { speedMenuOpen = true },
                     modifier =
@@ -1100,23 +1277,11 @@ private fun PlayerControls(
                             stateDescription = "Playback speed, ${speedLabel(st.speed)}"
                         },
                 ) {
-                    Icon(Icons.Filled.Speed, contentDescription = "Playback speed")
-                }
-            } else {
-                FilledTonalButton(
-                    onClick = { speedMenuOpen = true },
-                    contentPadding =
-                        PaddingValues(horizontal = OmegaSpacing.md, vertical = 0.dp),
-                    modifier =
-                        Modifier
-                            .height(36.dp)
-                            .semantics {
-                                stateDescription = "Playback speed, ${speedLabel(st.speed)}"
-                            },
-                ) {
-                    Icon(Icons.Filled.Speed, contentDescription = "Playback speed", modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(OmegaSpacing.xs))
-                    Text(speedLabel(st.speed), maxLines = 1, softWrap = false)
+                    Icon(
+                        Icons.Filled.Speed,
+                        contentDescription = "Playback speed",
+                        tint = if (st.speed != 1f) scheme.primary else contentColor,
+                    )
                 }
             }
             DropdownMenu(
@@ -1172,5 +1337,49 @@ private fun PlayerControls(
         // shell's bottom chrome. The extra spacer guarantees the
         // final line scrolls fully into the clear.
         Spacer(Modifier.height(OmegaSpacing.xxl))
+    }
+}
+
+/**
+ * One labeled quick action in the player's secondary cluster
+ * (player spec §7): a 48dp icon target with its label beneath —
+ * `bodySmall`, the gradient content color at 70%, or `primary`
+ * when the action is in an armed/active state. The caller gives
+ * the unit a fixed slot (a Row weight), so the label's text
+ * changing — a sleep countdown ticking, a speed rate appearing —
+ * never moves a neighbor. The label is single-line, centered, and
+ * allowed to overflow its slot visibly rather than clip: at font
+ * 2.0 the words are wider than a quarter of the content width and
+ * must stay intact (§9).
+ */
+@Composable
+private fun PlayerQuickAction(
+    label: String,
+    active: Boolean,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    button: @Composable () -> Unit,
+) {
+    Column(
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        button()
+        Spacer(Modifier.height(OmegaSpacing.xs))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color =
+                if (active) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    contentColor.copy(alpha = 0.7f)
+                },
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
