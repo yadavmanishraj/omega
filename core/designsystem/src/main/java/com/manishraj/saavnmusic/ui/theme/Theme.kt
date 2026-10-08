@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
@@ -98,7 +99,12 @@ val OmegaShapes =
         extraExtraLarge = RoundedCornerShape(48.dp),
     )
 
-private val DarkColors =
+// Internal (not private) so ThemeCompletenessTest can assert the
+// completeness invariant: EVERY role below is assigned a brand value
+// (visual-uplift spec §1 / gate V1). Before the uplift, the whole
+// surfaceContainer family except Highest was unassigned here and
+// silently resolved to baseline Material grays (#211F26 / #2B2930).
+internal val DarkColors =
     darkColorScheme(
         primary = Color(0xFF3BE477),
         onPrimary = Color(0xFF0F172A),
@@ -122,7 +128,22 @@ private val DarkColors =
         onSurface = Color(0xFFF8FAFC),
         surfaceVariant = Color(0xFF1B1B30),
         onSurfaceVariant = Color(0xFFC3CAD9),
-        surfaceContainerHighest = Color(0xFF27273B),
+        // Surface ladder (uplift spec §1.1/§1.2): every step derived
+        // from the #12122B seed on the M3 tone grid (Dim 5 / Lowest ~3
+        // / Low 10 / Container 12 / High 17 / Highest 22 / Bright 24),
+        // holding the seed's indigo hue+chroma. Container is the
+        // chrome role (nav, mini-player); High is the grouped-surface
+        // role (segmented lists, snackbar host, search bar).
+        surfaceDim = Color(0xFF0F0F23),
+        surfaceBright = Color(0xFF383652),
+        surfaceContainerLowest = Color(0xFF0B0B1F),
+        surfaceContainerLow = Color(0xFF171730),
+        surfaceContainer = Color(0xFF1D1D37),
+        surfaceContainerHigh = Color(0xFF282742),
+        surfaceContainerHighest = Color(0xFF33324E),
+        // Declared, not defaulted: an unassigned surfaceTint keeps
+        // the BASELINE scheme's primary as the tint color.
+        surfaceTint = Color(0xFF3BE477),
         outline = Color(0xFF312E81),
         outlineVariant = Color(0xFF27273B),
         // Inverse roles mirror the LIGHT scheme (R-P8): its surface,
@@ -133,10 +154,31 @@ private val DarkColors =
         inversePrimary = Color(0xFF15803D),
         error = Color(0xFFEF4444),
         onError = Color(0xFF000000),
+        // Error ramp (uplift spec §1.2): the scheme's error hue,
+        // chroma tempered — was an unassigned baseline leak (#93000A).
+        errorContainer = Color(0xFF72000E),
+        onErrorContainer = Color(0xFFFFB9AB),
+        // Fixed family (uplift spec §1.2): theme-invariant by
+        // definition, so both schemes carry the same values — the
+        // primary ramp at tones 90/80/10/30, chroma tempered; the
+        // secondary/tertiary families reuse this scheme's own values.
+        // Completeness only: no current consumers.
+        primaryFixed = Color(0xFFA7F4B6),
+        primaryFixedDim = Color(0xFF8BD79B),
+        onPrimaryFixed = Color(0xFF002600),
+        onPrimaryFixedVariant = Color(0xFF005321),
+        secondaryFixed = Color(0xFFE0E7FF),
+        secondaryFixedDim = Color(0xFFA5B4FC),
+        onSecondaryFixed = Color(0xFF1E1B4B),
+        onSecondaryFixedVariant = Color(0xFF312E81),
+        tertiaryFixed = Color(0xFFB9F2DF),
+        tertiaryFixedDim = Color(0xFF3ED6A5),
+        onTertiaryFixed = Color(0xFF0E3B33),
+        onTertiaryFixedVariant = Color(0xFF134E3E),
         scrim = Color(0x99000000),
     )
 
-private val LightColors =
+internal val LightColors =
     lightColorScheme(
         primary = Color(0xFF15803D),
         onPrimary = Color(0xFFFFFFFF),
@@ -154,13 +196,30 @@ private val LightColors =
         onTertiary = Color(0xFFFFFFFF),
         tertiaryContainer = Color(0xFFC9EFE1),
         onTertiaryContainer = Color(0xFF0E3B33),
-        background = Color(0xFFF8FAFC),
+        // Page stack re-based to tone 98 (uplift spec §1.3): with
+        // surface at pure white, surfaceContainerLowest could never
+        // sit BELOW it and the ladder could not be monotone. The
+        // ~1.8 L* shift from white is imperceptible; pure white moves
+        // to Lowest, where raised inner cards use it.
+        background = Color(0xFFF7F9FF),
         onBackground = Color(0xFF0F172A),
-        surface = Color(0xFFFFFFFF),
+        surface = Color(0xFFF7F9FF),
         onSurface = Color(0xFF0F172A),
         surfaceVariant = Color(0xFFE8EAF3),
         onSurfaceVariant = Color(0xFF475569),
-        surfaceContainerHighest = Color(0xFFE8EAF3),
+        // Surface ladder (uplift spec §1.1/§1.3): every step derived
+        // from the #E8EAF3 seed on the M3 tone grid (Dim 87 / Lowest
+        // 100 / Low 96 / Container 94 / High 92 / Highest 90 /
+        // Bright 98), strictly monotone down from the page.
+        surfaceDim = Color(0xFFD8DAE2),
+        surfaceBright = Color(0xFFF7F9FF),
+        surfaceContainerLowest = Color(0xFFFFFFFF),
+        surfaceContainerLow = Color(0xFFF1F3FC),
+        surfaceContainer = Color(0xFFEBEDF7),
+        surfaceContainerHigh = Color(0xFFE6E8F1),
+        surfaceContainerHighest = Color(0xFFE0E2EB),
+        // Declared, not defaulted (see DarkColors).
+        surfaceTint = Color(0xFF15803D),
         outline = Color(0xFF94A3B8),
         outlineVariant = Color(0xFFCBD5E1),
         // Inverse roles mirror the DARK scheme (R-P8): its surface,
@@ -170,19 +229,40 @@ private val LightColors =
         inversePrimary = Color(0xFF3BE477),
         error = Color(0xFFDC2626),
         onError = Color(0xFFFFFFFF),
+        // Error ramp (uplift spec §1.3): was an unassigned baseline
+        // leak (#F9DEDC / #93000A).
+        errorContainer = Color(0xFFFFC4B6),
+        onErrorContainer = Color(0xFF6C0008),
+        // Fixed family: theme-invariant — identical values to the
+        // dark scheme by definition (uplift spec §1.3).
+        primaryFixed = Color(0xFFA7F4B6),
+        primaryFixedDim = Color(0xFF8BD79B),
+        onPrimaryFixed = Color(0xFF002600),
+        onPrimaryFixedVariant = Color(0xFF005321),
+        secondaryFixed = Color(0xFFE0E7FF),
+        secondaryFixedDim = Color(0xFFA5B4FC),
+        onSecondaryFixed = Color(0xFF1E1B4B),
+        onSecondaryFixedVariant = Color(0xFF312E81),
+        tertiaryFixed = Color(0xFFB9F2DF),
+        tertiaryFixedDim = Color(0xFF3ED6A5),
+        onTertiaryFixed = Color(0xFF0E3B33),
+        onTertiaryFixedVariant = Color(0xFF134E3E),
         scrim = Color(0x99000000),
     )
 
 /**
  * Type scale per spec §2.2 (Righteous display / Poppins body roles), plus the
  * Material 3 Expressive `…Emphasized` twins for all 15 styles (M3 Expressive
- * spec §2.2): same family and size as the baseline style, one weight step up
- * (400→500, 500→700, 600→700). The twins ARE consumed where §2.2 assigns
+ * spec §2.2). Poppins twins step one weight up (400→500, 500→700, 600→700)
+ * at the same size. Righteous ships a single weight (Regular), so a weight
+ * step there would be a lie in the system: its twins express emphasis by
+ * SIZE step instead (visual-uplift spec §2.3) — headlineMediumEmphasized
+ * steps 28→32sp — and displaySmallEmphasized (the player title) stays
+ * 36sp, its emphasis coming from scale plus artwork, never from a weight
+ * Righteous does not have. The twins ARE consumed where §2.2 assigns
  * them — section headers (titleMediumEmphasized), Detail and local-playlist
  * header titles, the player title, the Home greeting — while rows and body
- * text stay baseline. Righteous ships a single weight, so
- * its emphasized twins resolve to the same glyphs with the stepped weight
- * recorded in the style.
+ * text stay baseline.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val OmegaTypography =
@@ -218,9 +298,14 @@ private val OmegaTypography =
         titleMedium =
             TextStyle(
                 fontFamily = BodyFontFamily,
-                fontWeight = FontWeight.SemiBold,
+                // M3 baseline weight + tracking (uplift spec §2.1):
+                // this style was Poppins SemiBold with no tracking,
+                // one weight heavier than Material's Medium — every
+                // list headline in the app inherited the extra weight.
+                fontWeight = FontWeight.Medium,
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
+                letterSpacing = 0.15.sp,
             ),
         titleSmall =
             TextStyle(
@@ -278,6 +363,10 @@ private val OmegaTypography =
                 fontSize = 45.sp,
                 lineHeight = 52.sp,
             ),
+        // Player hero title: stays 36sp — the emphasis is scale plus
+        // artwork (M3E §5). The recorded Medium weight does not exist
+        // in Righteous and resolves to Regular; this token must never
+        // claim a weight step (uplift spec §2.3).
         displaySmallEmphasized =
             TextStyle(
                 fontFamily = DisplayFontFamily,
@@ -296,8 +385,11 @@ private val OmegaTypography =
             TextStyle(
                 fontFamily = DisplayFontFamily,
                 fontWeight = FontWeight.Medium,
-                fontSize = 28.sp,
-                lineHeight = 36.sp,
+                // Size-step emphasis (uplift spec §2.3): the baseline
+                // twin at 28sp was a rendering no-op, because Righteous
+                // has no Medium weight to step to.
+                fontSize = 32.sp,
+                lineHeight = 40.sp,
             ),
         headlineSmallEmphasized =
             TextStyle(
@@ -375,6 +467,85 @@ private val OmegaTypography =
 val TabularTimeStyle: TextStyle
     @Composable
     get() = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum")
+
+/**
+ * Named kit text styles that are not Material slots (visual-uplift spec
+ * §2.2). Per-screen hand-picked sizes are banned (material-3 typography
+ * rule); kit components consume these tokens instead.
+ *
+ * The label styles ([eyebrow], [sectionLabel]) are tracked-uppercase
+ * labels, honestly: Compose TextStyle has no text-transform and Poppins
+ * ships no true small-caps cut, so the consuming kit composables apply
+ * `String.uppercase()` at render time — the transform is presentational
+ * and never lives in the copy. Colors are likewise applied by consumers
+ * from scheme roles ([sectionLabel] and [rowMeta] in onSurfaceVariant,
+ * [rankNumeral] in onSurfaceVariant at 60% alpha); a token here is type
+ * only.
+ */
+object OmegaType {
+    /** Home masthead greeting (Editorial lead): Poppins Bold, tight tracking. */
+    val masthead =
+        TextStyle(
+            fontFamily = BodyFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 31.sp,
+            lineHeight = 36.sp,
+            letterSpacing = (-0.02f).em,
+        )
+
+    /** Masthead subtitle ("No account. Just music."), rendered uppercase by the kit. */
+    val eyebrow =
+        TextStyle(
+            fontFamily = BodyFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            lineHeight = 16.sp,
+            letterSpacing = 0.17f.em,
+        )
+
+    /** Section taxonomy label on calm screens, rendered uppercase by the kit. */
+    val sectionLabel =
+        TextStyle(
+            fontFamily = BodyFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            lineHeight = 16.sp,
+            letterSpacing = 0.15f.em,
+        )
+
+    /** Song-row title: one line, ellipsis (the kit protects the duration slot). */
+    val rowTitle =
+        TextStyle(
+            fontFamily = BodyFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+            letterSpacing = 0.1.sp,
+        )
+
+    /** Song-row supporting line (artist • duration). */
+    val rowMeta =
+        TextStyle(
+            fontFamily = BodyFontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            letterSpacing = 0.25.sp,
+        )
+
+    /**
+     * Ranked-chart numeral ("01"): tabular figures. Decoration only —
+     * consumers must keep it out of the semantics tree (uplift §5.2).
+     */
+    val rankNumeral =
+        TextStyle(
+            fontFamily = BodyFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 11.sp,
+            lineHeight = 16.sp,
+            fontFeatureSettings = "tnum",
+        )
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
