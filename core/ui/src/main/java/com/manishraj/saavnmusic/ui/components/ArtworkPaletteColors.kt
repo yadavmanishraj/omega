@@ -165,6 +165,13 @@ const val CHROME_WASH_ALPHA_DARK = 0.14f
 /** Alpha of the mini-player's chrome-tint wash, light theme (uplift spec §3.3). */
 const val CHROME_WASH_ALPHA_LIGHT = 0.10f
 
+/**
+ * Fraction of the bar's width the chrome-tint wash spans, measured
+ * from the artwork side, before it fades to transparent (uplift spec
+ * §3.3: the artwork-side 40%).
+ */
+const val CHROME_WASH_FRACTION = 0.40f
+
 /** Minimum contrast for text over the artwork color (spec invariant: 4.5:1). */
 private const val MIN_TEXT_CONTRAST = 4.5f
 
