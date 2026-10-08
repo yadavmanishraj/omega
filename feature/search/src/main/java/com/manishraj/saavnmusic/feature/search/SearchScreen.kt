@@ -150,7 +150,15 @@ fun SearchScreen(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(OmegaSpacing.md),
+                    // Horizontal inset is the §4.1 line (lg = 16dp):
+                    // md (12dp) left the bar's visible edge at 32px
+                    // against the 42px line every other edge hits
+                    // (Round 1 LY-2). Vertical stays md — only the
+                    // horizontal placement was off the line. The
+                    // measured 32px equals 12dp × 2.625 exactly, so
+                    // the bar has no internal inset to compensate:
+                    // screen padding alone lands it on 42px.
+                    .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.md),
         ) {}
 
         if (!online) {
@@ -466,7 +474,12 @@ fun SearchScreen(
                             // fit more columns instead of inflating
                             // two giant posters.
                             columns = GridCells.Adaptive(minSize = 160.dp),
-                            modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
+                            // §4.1 line (lg = 16dp): sm (8dp) started
+                            // the grid's artwork at 21px against the
+                            // 42px line (Round 1 LY-2). MediaCard adds
+                            // no inset of its own, so the grid's outer
+                            // padding is the whole sum.
+                            modifier = Modifier.padding(horizontal = OmegaSpacing.lg),
                         ) {
                             items(albums) { a ->
                                 MediaCard(a.name, a.artist, a.imageUrl) { onAlbum(a.id) }
@@ -521,7 +534,10 @@ fun SearchScreen(
                     else ->
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 160.dp),
-                            modifier = Modifier.padding(horizontal = OmegaSpacing.sm),
+                            // Same §4.1 line as the Albums grid above
+                            // (lg = 16dp, not sm): identical geometry
+                            // must not keep a second off-line edge.
+                            modifier = Modifier.padding(horizontal = OmegaSpacing.lg),
                         ) {
                             items(playlists) { p ->
                                 MediaCard(p.name, songCountLabel(p.songCount ?: 0), p.imageUrl) { onPlaylist(p.id) }
