@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -383,20 +384,39 @@ fun ShimmerList() {
  * (verify-loop LY-9). Here every block promises the ranked layout:
  * 16dp inset, the 24dp rank column, 44dp artwork @ md, text at the
  * 108dp column — the loaded rows land exactly where these blocks
- * promise. Like [ShimmerList], no dividers are drawn: the hairlines
- * are list-side in the resolved chart, and skeleton geometry is the
- * content blocks.
+ * promise.
+ *
+ * The vertical promise is the per-row PITCH, not just the row box.
+ * The resolved chart composes each row as a list item holding the
+ * row plus, between rows, an [EditorialRowDivider] item — and the
+ * row's REALIZED height is 60dp, not its 56dp floor: the trailing
+ * overflow button's 48dp touch target is the tallest content
+ * (artwork is 44dp), over 6dp padding each side. The divider item
+ * adds one hairline (1px). The skeleton mirrors both terms: 60dp
+ * rows (the 44dp artwork block centers in the 48dp content box, so
+ * even the first row's artwork sits where the loaded one sits) and
+ * a hairline slot at the 108dp text column between rows, never
+ * after the last. An earlier cut drew 56dp rows and no slots, so
+ * every row below the first settled ≈11.5px on load as the missing
+ * row height and hairline appeared (TELL-SHIMMER-DIVIDER-SETTLE,
+ * verify-loop F6).
  */
 @Composable
 fun ShimmerRankedList() {
     val phase = rememberShimmerPhase()
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+    // One physical pixel in dp — the layout height the resolved
+    // chart's Dp.Hairline divider item occupies.
+    val hairline = with(LocalDensity.current) { 1f.toDp() }
+    // The ranked text column (the inset Home passes its divider):
+    // screen inset + rank column + gap + artwork + gap = 108dp.
+    val dividerInset = OmegaSpacing.lg + 24.dp + OmegaSpacing.md + 44.dp + OmegaSpacing.md
     Column {
-        repeat(6) {
+        repeat(6) { index ->
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 56.dp)
+                    .heightIn(min = 60.dp)
                     .padding(horizontal = OmegaSpacing.lg, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -435,6 +455,20 @@ fun ShimmerRankedList() {
                             .shimmerSweep(phase, highlight),
                     )
                 }
+            }
+            if (index < 5) {
+                // The divider slot: exactly the loaded divider
+                // item's height — one hairline, filled by the line
+                // itself in the skeleton's block tone, starting at
+                // the text column. Never after the last row.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(hairline)
+                        .padding(start = dividerInset)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .shimmerSweep(phase, highlight),
+                )
             }
         }
     }
