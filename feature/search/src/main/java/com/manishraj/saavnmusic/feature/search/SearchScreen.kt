@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -34,7 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SearchBar
@@ -67,13 +67,14 @@ import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
 import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
+import com.manishraj.saavnmusic.ui.components.OmegaSectionLabel
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
-import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.components.songCountLabel
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
+import com.manishraj.saavnmusic.ui.theme.OmegaType
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -322,7 +323,7 @@ fun SearchScreen(
                     is UiState.Success ->
                         LazyColumn {
                             if (topResults.isNotEmpty()) {
-                                item { SectionHeader("Top results") }
+                                item { SearchSectionLabel("Top results", first = true) }
                                 // Section-prefixed indexed keys: the
                                 // top hit usually ALSO appears in the
                                 // songs list below — bare song-id keys
@@ -406,7 +407,7 @@ fun SearchScreen(
                                         }
                                     }
                                 }
-                                item { SectionHeader("Songs") }
+                                item { SearchSectionLabel("Songs") }
                             }
                             itemsIndexed(
                                 s.data,
@@ -489,13 +490,17 @@ fun SearchScreen(
                     else ->
                         LazyColumn {
                             items(artists) { a ->
-                                ListItem(
-                                    leadingContent = { CircularArtwork(a.imageUrl, contentDescription = a.name) },
-                                    trailingContent = { EntityRowChevron() },
-                                    modifier = Modifier.clickable { onArtist(a.id) },
-                                ) {
-                                    Text(a.name, style = MaterialTheme.typography.titleMedium)
-                                }
+                                // Same local entity-row construction
+                                // as the All tab's top results (§5.1
+                                // grammar, RULING A) — no meta line:
+                                // an artist row is name + artwork only.
+                                TopEntityRow(
+                                    title = a.name,
+                                    subtitle = null,
+                                    imageUrl = a.imageUrl,
+                                    circular = true,
+                                    onClick = { onArtist(a.id) },
+                                )
                             }
                         }
                 }
@@ -562,6 +567,34 @@ private fun playNextMessage(
         InsertNextResult.APPENDED -> "Added to queue: $title"
     }
 
+/**
+ * Section taxonomy label for the results list (uplift spec §5.4/§2.4:
+ * on calm screens headers are labels, not titles). [OmegaSectionLabel]
+ * adds no padding of its own — the caller places it on the §4.1 line —
+ * so this item owns the spacing: the 16dp horizontal line, and
+ * vertical padding picked so the measured gaps land on the §4.1
+ * grammar (label text → first row's content = 12dp: this label's xs
+ * bottom + the row's own sm top padding; section → section = 24dp:
+ * the previous row's sm bottom + this label's lg top). The [first]
+ * label sits directly under the tab row, whose chrome already
+ * separates it, so it takes md on top instead of the full gap.
+ */
+@Composable
+private fun SearchSectionLabel(
+    text: String,
+    first: Boolean = false,
+) {
+    OmegaSectionLabel(
+        text,
+        Modifier.padding(
+            start = OmegaSpacing.lg,
+            top = if (first) OmegaSpacing.md else OmegaSpacing.lg,
+            end = OmegaSpacing.lg,
+            bottom = OmegaSpacing.xs,
+        ),
+    )
+}
+
 /** Initial results load (spec §5): the expressive morph, centered —
  * search loads are short, undifferentiated waits, unlike the
  * content-shaped skeleton loads on Home/Detail. */
@@ -606,51 +639,79 @@ private fun SearchTabs(
 /**
  * Trailing affordance for entity rows: the row itself is the door,
  * so the chevron only SIGNALS navigation. Decorative (null content
- * description), never a separate action.
+ * description), never a separate action. The tint is explicit —
+ * `onSurfaceVariant`, the role M3 assigns trailing row content —
+ * because the §5.1 [Row] construction supplies no content colors
+ * the way the stock ListItem did.
  */
 @Composable
 private fun EntityRowChevron() {
     Icon(
         Icons.AutoMirrored.Filled.KeyboardArrowRight,
         contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
 /**
- * Row for a non-song top result (F-02): the same ListItem grammar as
- * the Artists tab — artwork, name, type line, the whole row
- * navigates, trailing chevron as the navigation affordance.
- * Deliberately NO overflow button: entity rows have no
+ * Row for a non-song entity (F-02): artwork, name, type line, the
+ * whole row navigates, trailing chevron as the navigation
+ * affordance. Deliberately NO overflow button: entity rows have no
  * song menu, and the inert ⋮ was part of what made the old
  * force-mapped rows read as broken songs.
+ *
+ * Construction follows the §5.1 row grammar (uplift spec; RULING A —
+ * aligned locally in this file, no kit EntityRow this wave): a plain
+ * [Row] on a transparent container — NOT a stock ListItem, whose
+ * default `surface` band was one of the audit's five competing
+ * background treatments — title in [OmegaType.rowTitle], meta in
+ * [OmegaType.rowMeta] on `onSurfaceVariant`, the 16dp horizontal
+ * inset and the same 8dp vertical padding as [SongRow]. Artwork
+ * treatment is unchanged (kit defaults: [CircularArtwork] for
+ * artists, [Artwork] otherwise). Serves the All tab's top results
+ * and the Artists tab, where [subtitle] is null and no meta line
+ * renders.
  */
 @Composable
 private fun TopEntityRow(
     title: String,
-    subtitle: String,
+    subtitle: String?,
     imageUrl: String?,
     circular: Boolean,
     onClick: () -> Unit,
 ) {
-    ListItem(
-        supportingContent = {
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
-        },
-        leadingContent = {
-            if (circular) {
-                CircularArtwork(imageUrl, contentDescription = title)
-            } else {
-                Artwork(imageUrl, contentDescription = title)
-            }
-        },
-        trailingContent = { EntityRowChevron() },
-        modifier = Modifier.clickable { onClick() },
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            title,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleMedium,
-        )
+        if (circular) {
+            CircularArtwork(imageUrl, contentDescription = title)
+        } else {
+            Artwork(imageUrl, contentDescription = title)
+        }
+        Spacer(Modifier.width(OmegaSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = OmegaType.rowTitle,
+                color = scheme.onSurface,
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = OmegaType.rowMeta,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        EntityRowChevron()
     }
 }
