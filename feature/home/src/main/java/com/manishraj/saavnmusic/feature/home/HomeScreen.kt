@@ -134,7 +134,7 @@ private fun HomeRail(content: LazyListScope.() -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
             content = content,
         )
-        OmegaRailEdgeFade(Modifier.align(Alignment.CenterEnd))
+        OmegaRailEdgeFade(Modifier.matchParentSize())
     }
 }
 
