@@ -1,6 +1,7 @@
 package com.manishraj.saavnmusic.feature.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,14 +11,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,20 +42,24 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.domain.Song
 import com.manishraj.saavnmusic.domain.UiState
 import com.manishraj.saavnmusic.playback.InsertNextResult
+import com.manishraj.saavnmusic.ui.components.EditorialRowDivider
 import com.manishraj.saavnmusic.ui.components.EmptyState
 import com.manishraj.saavnmusic.ui.components.ErrorState
 import com.manishraj.saavnmusic.ui.components.InlineErrorRow
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
+import com.manishraj.saavnmusic.ui.components.OmegaEyebrow
 import com.manishraj.saavnmusic.ui.components.OmegaLoadingIndicator
+import com.manishraj.saavnmusic.ui.components.OmegaRailEdgeFade
+import com.manishraj.saavnmusic.ui.components.OmegaSectionLabel
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
-import com.manishraj.saavnmusic.ui.components.SectionHeader
+import com.manishraj.saavnmusic.ui.components.RankedSongRow
 import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.ShimmerRail
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
-import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
+import com.manishraj.saavnmusic.ui.theme.OmegaType
 import java.util.Calendar
 
 /**
@@ -80,6 +84,59 @@ private fun greetingForHour(hour: Int): String =
         in 17..20 -> "Good evening"
         else -> "Good listening"
     }
+
+/**
+ * Divider inset for the ranked chart (uplift §5.2, coordinator
+ * ruling 2026-10-08): a [RankedSongRow]'s text column starts at 16dp
+ * screen inset + 24dp rank column + 12dp gap + 44dp artwork + 12dp
+ * gap = 108dp. The spec's §5.2 decomposition names 72dp — it omits
+ * the rank column; the ruling holds that text-column alignment
+ * governs, so the hairline starts where the text starts.
+ */
+private val RankedDividerInset = 108.dp
+
+/**
+ * A Home section header in the Editorial grammar (uplift §5.4,
+ * §4.1): the kit [OmegaSectionLabel] placed on the 16dp line by the
+ * caller-side padding (the kit adds no inset of its own — nested
+ * insets are how the stair-step happened, rulebook LY-2), the 24dp
+ * section gap above it, and the 12dp label-to-content gap below.
+ * Emitted as two column items so every section — loaded, loading,
+ * or errored — carries identical rhythm (rulebook LY-6).
+ */
+private fun LazyListScope.homeSection(text: String) {
+    item {
+        OmegaSectionLabel(
+            text,
+            Modifier.padding(
+                start = OmegaSpacing.lg,
+                end = OmegaSpacing.lg,
+                top = OmegaSpacing.xl,
+            ),
+        )
+    }
+    item { Spacer(Modifier.height(OmegaSpacing.md)) }
+}
+
+/**
+ * A Home rail in the §4.2 grammar: cards directly on the page
+ * background — 16dp content padding (the first card lands on the
+ * section line), 12dp item gaps, and the standard edge fade so a
+ * partially visible card dissolves into the background instead of
+ * slicing at an edge. No container, ever (TELL-FIVE-BACKGROUNDS,
+ * TELL-SLICED-RAIL).
+ */
+@Composable
+private fun HomeRail(content: LazyListScope.() -> Unit) {
+    Box {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = OmegaSpacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
+            content = content,
+        )
+        OmegaRailEdgeFade(Modifier.align(Alignment.CenterEnd))
+    }
+}
 
 /**
  * Home (REDESIGN_SPEC §4): opens straight into music. Sections are
@@ -150,44 +207,26 @@ fun HomeScreen(
     ) {
         LazyColumn(Modifier.fillMaxSize()) {
             item {
-                Row(
+                Column(
                     Modifier
                         .fillMaxWidth()
-                        .padding(start = OmegaSpacing.lg, end = OmegaSpacing.lg, top = OmegaSpacing.xl, bottom = OmegaSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(start = OmegaSpacing.lg, end = OmegaSpacing.lg, top = OmegaSpacing.xl),
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            greetingForHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)),
-                            // The screen's one emphasis (spec §5):
-                            // emphasized weight at headline size.
-                            style = MaterialTheme.typography.headlineMediumEmphasized,
-                        )
-                        Text(
-                            "No account. Just music.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.MusicNote,
-                            // Decoration only (polish item 5, R-P4):
-                            // the badge is a brand mark in the avatar
-                            // position, not a destination — a named
-                            // description would announce a dead end to
-                            // assistive tech. The greeting wordmark
-                            // carries the brand.
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    Text(
+                        greetingForHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)),
+                        // The screen's one emphasis (uplift §2.3):
+                        // the Editorial masthead — Poppins Bold with
+                        // tight tracking; Righteous leaves the Home
+                        // header. The 40dp badge that shared this
+                        // header is deleted (uplift §10.4): the
+                        // masthead owns the header, no replacement
+                        // chrome.
+                        style = OmegaType.masthead,
+                    )
+                    Spacer(Modifier.height(OmegaSpacing.xs))
+                    // The kit eyebrow applies the tracked-uppercase
+                    // treatment; the copy stays natural case (§2.2).
+                    OmegaEyebrow("No account. Just music.")
                 }
             }
 
@@ -222,33 +261,23 @@ fun HomeScreen(
             }
 
             if (history.isNotEmpty()) {
-                // "Jump back in" is Home's most important rail (spec
-                // §5): the brightest container mapping + the screen's
-                // one emphasized section header set it apart from the
-                // flat rails below; tap behavior is unchanged.
+                // "Jump back in" is Home's most important rail: it
+                // leads the page directly under the masthead. The
+                // polish-era slab — a grouped container behind the
+                // rail — is deleted outright (uplift §4.2/§5.3): the
+                // rail sits on the page background like every other
+                // rail, and its cards fade at the edge instead of
+                // slicing against the container. Tap behavior is
+                // unchanged.
+                homeSection("Jump back in")
                 item {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(OmegaRadius.xl),
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
-                    ) {
-                        Column {
-                            SectionHeader("Jump back in")
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = OmegaSpacing.sm),
-                            ) {
-                                items(history, key = { it.id }) { song ->
-                                    Box(Modifier.animateItem()) {
-                                        MediaCard(song.name, song.artist, song.imageUrl) {
-                                            onPlayQueue(history, history.indexOf(song))
-                                        }
-                                    }
+                    HomeRail {
+                        items(history, key = { it.id }) { song ->
+                            Box(Modifier.animateItem()) {
+                                MediaCard(song.name, song.artist, song.imageUrl) {
+                                    onPlayQueue(history, history.indexOf(song))
                                 }
                             }
-                            Spacer(Modifier.height(OmegaSpacing.sm))
                         }
                     }
                 }
@@ -258,9 +287,9 @@ fun HomeScreen(
                 // Offline variant: local content only; remote sections are
                 // hidden rather than errored (spec §4).
                 if (downloads.isNotEmpty()) {
-                    item { SectionHeader("Your downloads") }
+                    homeSection("Your downloads")
                     item {
-                        LazyRow {
+                        HomeRail {
                             items(downloads, key = { it.songId }) { d ->
                                 Box(Modifier.animateItem()) {
                                     MediaCard(d.name, d.artist, d.imageUrl) { onOpenDownloads() }
@@ -270,7 +299,7 @@ fun HomeScreen(
                     }
                 }
                 if (favorites.isNotEmpty()) {
-                    item { SectionHeader("Your favorites") }
+                    homeSection("Your favorites")
                     items(favorites.take(10), key = { it.id }) { song ->
                         Box(Modifier.animateItem()) {
                             SongRow(
@@ -325,22 +354,31 @@ fun HomeScreen(
                 } else {
                     when (val s = trending) {
                         is UiState.Loading -> {
-                            item { SectionHeader("Trending songs") }
+                            homeSection("Trending songs")
                             item { ShimmerList() }
                         }
                         is UiState.Error -> {
-                            item { SectionHeader("Trending songs") }
+                            homeSection("Trending songs")
                             item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
-                                item { SectionHeader("Trending songs") }
-                                items(s.data.take(10), key = { it.id }) { song ->
+                                homeSection("Trending songs")
+                                // The Editorial chart (uplift §5.2):
+                                // explicit ranks by chart position,
+                                // hairlines between rows, never after
+                                // the last. Play behavior is identical
+                                // — a tap plays the same queue from the
+                                // same index, and the trailing menu is
+                                // the shared overflow menu unchanged.
+                                val chart = s.data.take(10)
+                                itemsIndexed(chart, key = { _, song -> song.id }) { index, song ->
                                     val songIsFavorite = favorites.any { it.id == song.id }
-                                    Box(Modifier.animateItem()) {
-                                        SongRow(
+                                    Column(Modifier.animateItem()) {
+                                        RankedSongRow(
                                             song,
-                                            { onPlayQueue(s.data, s.data.indexOf(song)) },
+                                            rank = index + 1,
+                                            onClick = { onPlayQueue(s.data, s.data.indexOf(song)) },
                                             trailing = {
                                                 SongOverflowMenuButton(
                                                     song = song,
@@ -360,6 +398,9 @@ fun HomeScreen(
                                                 )
                                             },
                                         )
+                                        if (index < chart.lastIndex) {
+                                            EditorialRowDivider(startInset = RankedDividerInset)
+                                        }
                                     }
                                 }
                             }
@@ -367,18 +408,18 @@ fun HomeScreen(
                     }
                     when (val s = albums) {
                         is UiState.Loading -> {
-                            item { SectionHeader("New albums") }
+                            homeSection("New albums")
                             item { ShimmerRail() }
                         }
                         is UiState.Error -> {
-                            item { SectionHeader("New albums") }
+                            homeSection("New albums")
                             item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
-                                item { SectionHeader("New albums") }
+                                homeSection("New albums")
                                 item {
-                                    LazyRow {
+                                    HomeRail {
                                         items(s.data, key = { it.id }) { a ->
                                             Box(Modifier.animateItem()) {
                                                 MediaCard(a.name, a.artist, a.imageUrl) { onAlbum(a.id) }
@@ -391,18 +432,18 @@ fun HomeScreen(
                     }
                     when (val s = playlists) {
                         is UiState.Loading -> {
-                            item { SectionHeader("Playlists for you") }
+                            homeSection("Playlists for you")
                             item { ShimmerRail() }
                         }
                         is UiState.Error -> {
-                            item { SectionHeader("Playlists for you") }
+                            homeSection("Playlists for you")
                             item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
-                                item { SectionHeader("Playlists for you") }
+                                homeSection("Playlists for you")
                                 item {
-                                    LazyRow {
+                                    HomeRail {
                                         items(s.data, key = { it.id }) { p ->
                                             Box(Modifier.animateItem()) {
                                                 MediaCard(p.name, p.description.orEmpty(), p.imageUrl) { onPlaylist(p.id) }
@@ -415,18 +456,18 @@ fun HomeScreen(
                     }
                     when (val s = artists) {
                         is UiState.Loading -> {
-                            item { SectionHeader("Artists") }
+                            homeSection("Artists")
                             item { ShimmerRail() }
                         }
                         is UiState.Error -> {
-                            item { SectionHeader("Artists") }
+                            homeSection("Artists")
                             item { InlineErrorRow(s.message, onRetry = { vm.load() }) }
                         }
                         is UiState.Success -> {
                             if (s.data.isNotEmpty()) {
-                                item { SectionHeader("Artists") }
+                                homeSection("Artists")
                                 item {
-                                    LazyRow {
+                                    HomeRail {
                                         items(s.data, key = { it.id }) { a ->
                                             Box(Modifier.animateItem()) {
                                                 MediaCard(a.name, "Artist", a.imageUrl, circular = true) { onArtist(a.id) }
