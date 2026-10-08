@@ -718,8 +718,8 @@ fun FullPlayer(
                         colors =
                             ListItemDefaults.colors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedHeadlineColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                selectedSupportingColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedSupportingContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             ),
                     ) {
                         Text(s.name)
