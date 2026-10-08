@@ -73,7 +73,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -223,17 +222,11 @@ fun AppRoot() {
     // only); any other scale = the specs below run UNMODIFIED (the
     // pre-Wave-3 read-once + duration-scaling read is gone).
     val reducedMotion = LocalReducedMotion.current
-    // Font-scale nav mitigation (polish item 20): the bar/rail labels
-    // render single-line with no overflow handling, and at font
-    // scale 2.0 Track B measured them crowding the screen edge —
-    // "Settings" whole, but flush with ~3.4dp of clearance. At and
-    // above 1.6 the shell drops the labels and renders bar AND rail
-    // items icon-only (one decision, both surfaces): the selected
-    // indicator still carries the state, and each icon keeps the
-    // destination's name as its content description, so the items
-    // still announce themselves. Below 1.6 the labeled rendering is
-    // exactly what it was.
-    val iconOnlyNav = LocalDensity.current.fontScale >= ICON_ONLY_NAV_FONT_SCALE
+    // Nav labels render at EVERY font scale (Manish, 2026-10-08,
+    // resolving P-1 in Material 3's favor): the polish-era icon-only
+    // mode at scale ≥ 1.6 is gone — bar and rail items always carry
+    // their single-line labels, and each icon keeps the destination's
+    // name as its content description either way.
     // Artwork flight for the container transform (M3 Expressive spec
     // §4.2): the theme's slowSpatial spring — interruptible and
     // velocity-preserving, so a collapse mid-flight (or a predictive
@@ -556,19 +549,14 @@ fun AppRoot() {
                                         contentDescription = dest.label,
                                     )
                                 },
-                                label =
-                                    if (iconOnlyNav) {
-                                        null
-                                    } else {
-                                        {
-                                            Text(
-                                                dest.label,
-                                                style = MaterialTheme.typography.labelMedium,
-                                                maxLines = 1,
-                                                softWrap = false,
-                                            )
-                                        }
-                                    },
+                                label = {
+                                    Text(
+                                        dest.label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                },
                             )
                         }
                         Spacer(Modifier.weight(1f))
@@ -636,19 +624,14 @@ fun AppRoot() {
                                                     contentDescription = dest.label,
                                                 )
                                             },
-                                            label =
-                                                if (iconOnlyNav) {
-                                                    null
-                                                } else {
-                                                    {
-                                                        Text(
-                                                            dest.label,
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            maxLines = 1,
-                                                            softWrap = false,
-                                                        )
-                                                    }
-                                                },
+                                            label = {
+                                                Text(
+                                                    dest.label,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                )
+                                            },
                                         )
                                     }
                                 }
@@ -672,14 +655,6 @@ private data class TopLevelDestination(
 /** Medium-width lower bound (RESEARCH_4 §2.1): 600dp and up is the
  * medium width class — the shell swaps its bottom bar for a rail. */
 private const val MEDIUM_WIDTH_LOWER_BOUND_DP = 600
-
-/** Font scale at and above which the shell's bar and rail items
- * render icon-only (polish item 20): past this scale the
- * single-line labels crowd the screen edge (Track B: "Settings"
- * flush at 2.0), so the labels step aside and the icons — which
- * keep the destinations' names as content descriptions — carry
- * the items alone. */
-private const val ICON_ONLY_NAV_FONT_SCALE = 1.6f
 
 /** Chrome divider alpha (design spec §4.3): the hairline above
  * the mini-player / nav chrome stack renders outlineVariant at
