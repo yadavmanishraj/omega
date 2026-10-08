@@ -83,6 +83,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -108,6 +109,7 @@ import com.manishraj.saavnmusic.ui.components.OmegaPlayPauseIcon
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedContainer
 import com.manishraj.saavnmusic.ui.components.animatePaletteColor
 import com.manishraj.saavnmusic.ui.components.rememberArtworkPalette
+import com.manishraj.saavnmusic.ui.components.rememberChromeWashBrush
 import com.manishraj.saavnmusic.ui.components.safeGradientEnd
 import com.manishraj.saavnmusic.ui.theme.OmegaMotion
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
@@ -196,10 +198,20 @@ private fun SharedArtwork(
 
 /**
  * Mini-player (REDESIGN_SPEC §3.2): sacred — anchored above the nav bar,
- * swipe/back never stops playback. Progress hairline on top (wavy
- * while buffering — the media-surface wave, spec §5), a fixed 24dp
- * buffering slot so the layout never shifts, 48dp targets. Calm
+ * swipe/back never stops playback. 48dp transport targets. Calm
  * surface: baseline type only, no emphasized twins (spec §2.2).
+ *
+ * Uplift construction (visual-uplift spec §5.5): the bar is CHROME
+ * now, not an artwork surface. The container is the chrome role
+ * `surfaceContainer`; artwork color survives only as the §3.3 wash —
+ * the kit's chrome-tint brush behind the row, artwork-side 40% —
+ * retargeted through the shared palette crossfade (§3.5). Progress
+ * is the §3.4 hairline: 2dp on the chrome surface (indicator
+ * `primary`, track `surfaceContainerHighest` — never raw primary on
+ * a tinted ground), and buffering swaps to the wavy variant in the
+ * same two colors, in the same fixed slot, so the bar never changes
+ * height. The §4.3 chrome divider above the bar is the shell's to
+ * draw, not this composable's.
  */
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -228,101 +240,113 @@ fun MiniPlayer(
         }
     }
     val cur = st.current ?: return
-    // Artwork tint (UIUX_DESIGN §3.1.3): the container takes the
-    // artwork's darkened color, crossfading on the shared palette
-    // helper (spec §4.4) on track change.
+    // Artwork wash (uplift §3.3): the palette feeds ONLY the wash
+    // brush now — the bar's fill is the chrome role below, and the
+    // container color no longer animates (§3.5).
     val palette = rememberArtworkPalette(cur.imageUrl)
-    val containerColor by animatePaletteColor(
-        targetValue = palette.mutedDark,
-        label = "miniPlayerContainer",
-    )
-    val contentColor by animatePaletteColor(
-        targetValue = palette.onMutedDark,
-        label = "miniPlayerContent",
-    )
-    Surface(onClick = onOpen, tonalElevation = 3.dp, color = containerColor) {
-        CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Column {
-                val progress =
-                    if (st.durationMs > 0) {
-                        (st.positionMs.toFloat() / st.durationMs).coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    }
-                // Fixed 4dp strip: the determinate hairline and the
-                // buffering wave occupy the same slot, so the bar
-                // never changes height when buffering starts/stops.
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(4.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (st.isBuffering) {
-                        LinearWavyProgressIndicator(Modifier.fillMaxWidth())
-                    } else {
-                        // The determinate bar fills the whole slot
-                        // (polish item 23): at 2dp centered it read
-                        // as decoration at a glance; the slot height
-                        // was already reserved, so this costs no
-                        // layout shift.
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp),
-                        )
-                    }
+    val scheme = MaterialTheme.colorScheme
+    // The theme-mode decision lives in MainActivity and is not
+    // exposed to features; the wash band is picked for the chrome
+    // surface it actually sits on — surfaceContainer's luminance
+    // splits cleanly (dark ≈ 0.01, light ≈ 0.85) in every scheme
+    // this app applies, static or dynamic.
+    val darkTheme = scheme.surfaceContainer.luminance() < 0.5f
+    val washBrush = rememberChromeWashBrush(palette, darkTheme)
+    // Chrome container (uplift §5.5): shape and tonalElevation keep
+    // their Surface defaults — RectangleShape ("none") and 0. The
+    // old explicit tonalElevation = 3.dp tinted nothing over the
+    // palette fill (dead elevation) and is deleted, not re-valued;
+    // separation comes from the role plus the shell's chrome
+    // divider, not elevation.
+    Surface(onClick = onOpen, color = scheme.surfaceContainer) {
+        Column {
+            val progress =
+                if (st.durationMs > 0) {
+                    (st.positionMs.toFloat() / st.durationMs).coerceIn(0f, 1f)
+                } else {
+                    0f
                 }
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(OmegaSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SharedArtwork(
-                        song = cur,
-                        size = 48,
-                        corner = OmegaRadius.lg,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        artworkBoundsTransform = artworkBoundsTransform,
+            // Fixed 2dp strip (§3.4/§5.5): the determinate hairline
+            // and the buffering wave occupy the same slot in the
+            // same two colors, so the bar never changes height when
+            // buffering starts/stops. The 2dp is the spec's mandated
+            // indicator thickness (no OmegaSpacing token exists at
+            // 2dp; the kit's own 2dp gap in OmegaSegmentedList is
+            // likewise a literal).
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(2.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (st.isBuffering) {
+                    LinearWavyProgressIndicator(
+                        color = scheme.primary,
+                        trackColor = scheme.surfaceContainerHighest,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            cur.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(
-                            cur.artist,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style =
-                                if (LocalDensity.current.fontScale > 1.3f) {
-                                    MaterialTheme.typography.bodyMedium
-                                } else {
-                                    MaterialTheme.typography.bodySmall
-                                },
-                        )
-                    }
-                    // Fixed-size slot keeping the transport cluster's
-                    // geometry stable. Buffering has exactly ONE signal in
-                    // the mini player — the wavy hairline above (Wave 2a);
-                    // the old spinner here duplicated it (Wave 4 note).
-                    Box(Modifier.size(24.dp))
-                    IconButton(onClick = { vm.player.prev() }) {
-                        Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
-                    }
-                    IconButton(onClick = { vm.player.playPause() }) {
-                        OmegaPlayPauseIcon(isPlaying = st.isPlaying)
-                    }
-                    IconButton(onClick = { vm.player.next() }) {
-                        Icon(Icons.Filled.SkipNext, contentDescription = "Next")
-                    }
+                } else {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        color = scheme.primary,
+                        trackColor = scheme.surfaceContainerHighest,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(2.dp),
+                    )
+                }
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(washBrush)
+                    .padding(OmegaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SharedArtwork(
+                    song = cur,
+                    size = 40,
+                    corner = OmegaRadius.md,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    artworkBoundsTransform = artworkBoundsTransform,
+                )
+                Spacer(Modifier.width(OmegaSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        cur.name,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        cur.artist,
+                        // Meta de-emphasis (uplift §2.4): the artist
+                        // line takes onSurfaceVariant — it used to
+                        // render at the title's full brightness. The
+                        // fontScale > 1.3 bump to bodyMedium is
+                        // preserved (§6).
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style =
+                            if (LocalDensity.current.fontScale > 1.3f) {
+                                MaterialTheme.typography.bodyMedium
+                            } else {
+                                MaterialTheme.typography.bodySmall
+                            },
+                    )
+                }
+                IconButton(onClick = { vm.player.prev() }) {
+                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
+                }
+                IconButton(onClick = { vm.player.playPause() }) {
+                    OmegaPlayPauseIcon(isPlaying = st.isPlaying)
+                }
+                IconButton(onClick = { vm.player.next() }) {
+                    Icon(Icons.Filled.SkipNext, contentDescription = "Next")
                 }
             }
         }
@@ -678,21 +702,25 @@ fun FullPlayer(
                             }
                         },
                         supportingContent = { Text(s.artist) },
+                        // Selected treatment = the kit's
+                        // OmegaSegmentedListItem roles (uplift §5.9):
+                        // primaryContainer with its on-colors. The
+                        // alpha29 selectable overload reads the
+                        // selected* slots of ListItemColors — the
+                        // previous hand-mirror set the UNSELECTED
+                        // slots in this branch, so the current row
+                        // silently rendered the library default
+                        // (selectedContainer = secondaryContainer,
+                        // sampled on device in the polish pass)
+                        // while the code claimed primaryContainer.
+                        // Colors only: construction, jump and
+                        // per-row remove are untouched (RULING C).
                         colors =
-                            if (isCurrent) {
-                                // Selected treatment matches the kit's
-                                // OmegaSegmentedListItem exactly
-                                // (polish item 19): primaryContainer
-                                // with its on-colors, not the one-off
-                                // secondaryContainer this sheet used.
-                                ListItemDefaults.colors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    headlineColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    supportingColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                            } else {
-                                ListItemDefaults.colors()
-                            },
+                            ListItemDefaults.colors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedSupportingContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
                     ) {
                         Text(s.name)
                     }
