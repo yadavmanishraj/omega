@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.OmegaChoiceGroup
+import com.manishraj.saavnmusic.ui.components.OmegaSectionLabel
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedContainer
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedList
 import com.manishraj.saavnmusic.ui.components.OmegaSegmentedListItem
@@ -327,18 +328,21 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
     }
 }
 
-/** A settings section: primary-toned header over its segmented grouping. */
+/**
+ * A settings section: the kit [OmegaSectionLabel] over its segmented
+ * grouping (uplift spec §5.9 — group headers follow the §5.4 grammar:
+ * tracked-uppercase `sectionLabel` in onSurfaceVariant + hairline,
+ * label → content gap md per §4.1). The header is delegated to the
+ * kit whole — no local small-caps variant, no local color: the
+ * uppercase transform and the role resolution live in the kit.
+ */
 @Composable
 private fun SettingsSection(
     title: String,
     content: @Composable () -> Unit,
 ) {
     Column {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        OmegaSectionLabel(text = title)
         Spacer(Modifier.height(OmegaSpacing.md))
         content()
     }
