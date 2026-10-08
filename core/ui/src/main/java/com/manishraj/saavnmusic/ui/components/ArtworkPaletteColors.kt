@@ -36,6 +36,11 @@ import kotlin.math.pow
  *   directly on [mutedDark].
  * - Loading and every failure path resolve to [Fallback]: the spec's
  *   deep teal. Never grey, never a random hue, never a crash.
+ * - [sourceSwatch] keeps the RAW selected swatch (before the
+ *   [mutedDark] lightness cap) as the input to [chromeTint] — the
+ *   visual-uplift spec §3.2 chrome derivation. The v2 clamps apply to
+ *   chrome only: the hero path ([mutedDark], the role views,
+ *   [safeGradientEnd]) is deliberately NOT desaturated.
  *
  * Extraction runs off the main thread (Coil fetch + Palette on
  * [Dispatchers.Default]) and goes through the app's Coil singleton, so
@@ -46,6 +51,14 @@ data class ArtworkPaletteColors(
     val vibrant: Color,
     val mutedDark: Color,
     val onMutedDark: Color,
+    /**
+     * The raw selected swatch (vibrant, else dominant, else muted)
+     * BEFORE the [mutedDark] lightness cap — the input to [chromeTint].
+     * Defaults to [mutedDark], which preserves the swatch's hue and
+     * saturation (the cap touches lightness only), so palettes built
+     * without it still derive a correct dark-theme tint.
+     */
+    val sourceSwatch: Color = mutedDark,
 ) {
     companion object {
         /** Spec fallback (no artwork / extraction fails): deep teal. */
@@ -55,6 +68,10 @@ data class ArtworkPaletteColors(
                 vibrant = Color(0xFF1B7A64),
                 mutedDark = Color(0xFF0E3B33),
                 onMutedDark = Color.White,
+                // The fallback passes through the same chrome clamps
+                // as any swatch (uplift spec §3.1): its raw form is
+                // the deep teal itself.
+                sourceSwatch = Color(0xFF0E3B33),
             )
     }
 
@@ -84,10 +101,69 @@ data class ArtworkPaletteColors(
 
     /** Content on [roleContainer] — the strictly checked [onMutedDark]. */
     val onRoleContainer: Color get() = onMutedDark
+
+    // -- Chrome tint (visual-uplift spec §3.2) -----------------------
+    // The mini-player is chrome, not an artwork surface: artwork color
+    // reaches it only as this capped tint of the selected swatch,
+    // washed at low alpha over the chrome role (rendering in §3.3:
+    // alpha [CHROME_WASH_ALPHA_DARK]/[CHROME_WASH_ALPHA_LIGHT] over
+    // the artwork-side 40% of the bar). The hero path above is
+    // untouched by this derivation.
+
+    /**
+     * The chrome tint of the selected swatch, per the binding math:
+     * saturation scaled by [CHROME_SATURATION_SCALE] and capped at
+     * [CHROME_SATURATION_CAP]; lightness clamped into the theme's
+     * chrome band (dark 0.13–0.18, light 0.85–0.92); hue unchanged —
+     * hue is identity, saturation was the problem. The audit's
+     * magenta fixture (HSL 334°, 0.65, 0.55) lands at s = 0.29,
+     * l = 0.18 in dark: a muted plum whisper where the old math
+     * produced a full-saturation maroon fill.
+     */
+    fun chromeTint(darkTheme: Boolean): Color {
+        val hsl = sourceSwatch.toHsl()
+        val saturation = min(hsl[1] * CHROME_SATURATION_SCALE, CHROME_SATURATION_CAP)
+        val lightness =
+            if (darkTheme) {
+                hsl[2].coerceIn(CHROME_MIN_LIGHTNESS_DARK, CHROME_MAX_LIGHTNESS_DARK)
+            } else {
+                hsl[2].coerceIn(CHROME_MIN_LIGHTNESS_LIGHT, CHROME_MAX_LIGHTNESS_LIGHT)
+            }
+        return hslToColor(
+            hue = hsl[0],
+            saturation = saturation,
+            lightness = lightness,
+            alpha = sourceSwatch.alpha,
+        )
+    }
 }
 
 /** HSL lightness cap for [ArtworkPaletteColors.mutedDark] (spec: L* <= 0.18). */
 private const val MAX_GRADIENT_LIGHTNESS = 0.18f
+
+/** Saturation scale for the chrome tint (uplift spec §3.2: s × 0.45). */
+const val CHROME_SATURATION_SCALE = 0.45f
+
+/** Saturation cap for the chrome tint (uplift spec §3.2: s' <= 0.38). */
+const val CHROME_SATURATION_CAP = 0.38f
+
+/** Chrome tint lightness band, dark theme (uplift spec §3.2). */
+const val CHROME_MIN_LIGHTNESS_DARK = 0.13f
+
+/** Chrome tint lightness band, dark theme (uplift spec §3.2). */
+const val CHROME_MAX_LIGHTNESS_DARK = 0.18f
+
+/** Chrome tint lightness band, light theme (uplift spec §3.2). */
+const val CHROME_MIN_LIGHTNESS_LIGHT = 0.85f
+
+/** Chrome tint lightness band, light theme (uplift spec §3.2). */
+const val CHROME_MAX_LIGHTNESS_LIGHT = 0.92f
+
+/** Alpha of the mini-player's chrome-tint wash, dark theme (uplift spec §3.3). */
+const val CHROME_WASH_ALPHA_DARK = 0.14f
+
+/** Alpha of the mini-player's chrome-tint wash, light theme (uplift spec §3.3). */
+const val CHROME_WASH_ALPHA_LIGHT = 0.10f
 
 /** Minimum contrast for text over the artwork color (spec invariant: 4.5:1). */
 private const val MIN_TEXT_CONTRAST = 4.5f
@@ -203,6 +279,7 @@ private suspend fun extractPalette(
             vibrant = vibrant,
             mutedDark = mutedDark,
             onMutedDark = contentColorOn(mutedDark),
+            sourceSwatch = Color(baseSwatch.rgb),
         )
     }
 
