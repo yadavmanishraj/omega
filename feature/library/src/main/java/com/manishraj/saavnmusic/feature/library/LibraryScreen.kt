@@ -672,7 +672,7 @@ fun LibraryScreen(
         OmegaDestructiveConfirmDialog(
             title = "Clear history?",
             text = "Your listening history on this device will be removed. This can't be undone.",
-            confirmLabel = "Clear",
+            confirmLabel = "Clear history",
             onConfirm = {
                 vm.clearHistory()
                 confirmClearHistory = false
@@ -685,7 +685,7 @@ fun LibraryScreen(
         OmegaDestructiveConfirmDialog(
             title = "Delete download?",
             text = "“${d.name}” and its file will be removed from this device.",
-            confirmLabel = "Delete",
+            confirmLabel = "Delete download",
             onConfirm = {
                 pendingDelete = null
                 vm.deleteDownload(d)
@@ -710,7 +710,7 @@ fun LibraryScreen(
         OmegaDestructiveConfirmDialog(
             title = "Delete playlist?",
             text = "“${p.name}” will be removed from this device. The songs stay in your library.",
-            confirmLabel = "Delete",
+            confirmLabel = "Delete playlist",
             onConfirm = {
                 pendingDeletePlaylist = null
                 vm.deletePlaylistWithUndo(p) { deleted ->
