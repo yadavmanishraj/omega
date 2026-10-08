@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -51,6 +52,7 @@ import com.manishraj.saavnmusic.ui.components.GradientHeader
 import com.manishraj.saavnmusic.ui.components.LocalOmegaSnackbar
 import com.manishraj.saavnmusic.ui.components.MediaCard
 import com.manishraj.saavnmusic.ui.components.OmegaActionGroup
+import com.manishraj.saavnmusic.ui.components.OmegaRailEdgeFade
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.SectionHeader
 import com.manishraj.saavnmusic.ui.components.ShimmerList
@@ -573,29 +575,39 @@ fun ArtistScreen(
                     }
                     item { SectionHeader("Top albums") }
                     item {
-                        LazyRow(
-                            // Rails own their spacing (§4.2/§5.3):
-                            // cards start on the 16dp line with md
-                            // gaps — MediaCard carries no padding of
-                            // its own. The top inset completes the
-                            // §4.1 header→content md (the header's
-                            // sm + this xs); the bottom lg is the
-                            // page-end inset under the last section.
-                            contentPadding =
-                                PaddingValues(
-                                    start = OmegaSpacing.lg,
-                                    top = OmegaSpacing.xs,
-                                    end = OmegaSpacing.lg,
-                                    bottom = OmegaSpacing.lg,
-                                ),
-                            horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
-                        ) {
-                            itemsIndexed(
-                                a.data.topAlbums,
-                                key = { index, al -> "album-$index-${al.id}" },
-                            ) { _, al ->
-                                MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) }
+                        // §4.2: the rail sits directly on the page
+                        // background inside a Box so the standard
+                        // edge fade can overlay its end edge — a
+                        // partially visible card dissolves into the
+                        // background instead of slicing (the fade's
+                        // solid end is the background role, which is
+                        // this rail's ground).
+                        Box {
+                            LazyRow(
+                                // Rails own their spacing (§4.2/§5.3):
+                                // cards start on the 16dp line with md
+                                // gaps — MediaCard carries no padding of
+                                // its own. The top inset completes the
+                                // §4.1 header→content md (the header's
+                                // sm + this xs); the bottom lg is the
+                                // page-end inset under the last section.
+                                contentPadding =
+                                    PaddingValues(
+                                        start = OmegaSpacing.lg,
+                                        top = OmegaSpacing.xs,
+                                        end = OmegaSpacing.lg,
+                                        bottom = OmegaSpacing.lg,
+                                    ),
+                                horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
+                            ) {
+                                itemsIndexed(
+                                    a.data.topAlbums,
+                                    key = { index, al -> "album-$index-${al.id}" },
+                                ) { _, al ->
+                                    MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) }
+                                }
                             }
+                            OmegaRailEdgeFade(Modifier.align(Alignment.CenterEnd))
                         }
                     }
                 }
