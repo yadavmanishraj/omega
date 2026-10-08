@@ -1,6 +1,7 @@
 package com.manishraj.saavnmusic.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,21 +62,26 @@ fun OmegaLoadingIndicator(
 
 /**
  * Rail-shaped loading skeleton (polish item 9): card placeholders in
- * a horizontal row matching [MediaCard] geometry — a square artwork
- * block at the card corner (16dp) over title/subtitle bars, each card
- * [cardWidth] wide with the card's own inner padding — so a section
- * that resolves into a horizontal card rail LOADS as a rail, not as
- * the list rows [ShimmerList] promises. The sweep is the shared
- * shimmer phase, so under reduced motion the blocks pin static,
- * exactly like [ShimmerList]. Overflow past the screen edge is
- * clipped, never scrolled: a skeleton is a promise of shape, not
- * content.
+ * a horizontal row matching [MediaCard] geometry (uplift §5.3) — a
+ * square artwork block at the card corner (16dp) over title/subtitle
+ * bars, each card [cardWidth] wide with NO inner padding (the card
+ * carries none; rails own spacing, §4.2) — so a section that
+ * resolves into a horizontal card rail LOADS as a rail, not as the
+ * list rows [ShimmerList] promises. The sweep is the shared shimmer
+ * phase, so under reduced motion the blocks pin static, exactly like
+ * [ShimmerList]. Overflow past the screen edge is clipped, never
+ * scrolled: a skeleton is a promise of shape, not content.
+ *
+ * The silhouette stays rounded-square for EVERY rail, including
+ * Artists: the circular-skeleton variant is deferred (coordinator
+ * ruling D, uplift wave 2) — geometry aligns with MediaCard, the
+ * shape swap on resolve is the recorded, accepted remainder.
  */
 @Composable
 fun ShimmerRail(
     modifier: Modifier = Modifier,
     itemCount: Int = 4,
-    cardWidth: Int = 148,
+    cardWidth: Int = 124,
 ) {
     val phase = rememberShimmerPhase()
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
@@ -85,16 +91,15 @@ fun ShimmerRail(
             .fillMaxWidth()
             .clipToBounds()
             .padding(horizontal = OmegaSpacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
     ) {
         repeat(itemCount) {
             Column(
-                Modifier
-                    .width(cardWidth.dp)
-                    .padding(OmegaSpacing.sm),
+                Modifier.width(cardWidth.dp),
             ) {
                 Box(
                     Modifier
-                        .size((cardWidth - 16).dp)
+                        .size(cardWidth.dp)
                         .clip(RoundedCornerShape(OmegaRadius.xl))
                         .background(blockColor)
                         .shimmerSweep(phase, highlight),
