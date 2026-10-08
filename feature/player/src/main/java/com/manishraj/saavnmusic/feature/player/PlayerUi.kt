@@ -624,6 +624,11 @@ fun FullPlayer(
             .fillMaxSize()
             .background(playerBrush),
     ) {
+        // Hoisted: the nested layout lambdas below cannot read this
+        // scope's maxWidth/maxHeight through their own receivers,
+        // so the §3 pane math uses these plain vals.
+        val fullMaxWidth = maxWidth
+        val fullMaxHeight = maxHeight
         // The palette content color covers the WHOLE player, not
         // just the header: transport icons, time labels and section
         // labels outside the provider fell back to theme colors
@@ -676,7 +681,7 @@ fun FullPlayer(
                         // height minus its xl padding), and taller
                         // content simply grows past it and scrolls.
                         Column(
-                            Modifier.heightIn(min = maxHeight - OmegaSpacing.xl * 2),
+                            Modifier.heightIn(min = fullMaxHeight - OmegaSpacing.xl * 2),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             PlayerTopBar(onBack = onBack, onShowQueue = { showQueue = true })
@@ -704,7 +709,7 @@ fun FullPlayer(
                     // space below the secondary row is the column's
                     // own 24dp bottom padding.
                     Column(
-                        Modifier.heightIn(min = maxHeight - OmegaSpacing.xl * 2),
+                        Modifier.heightIn(min = fullMaxHeight - OmegaSpacing.xl * 2),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         PlayerTopBar(onBack = onBack, onShowQueue = { showQueue = true })
@@ -712,7 +717,7 @@ fun FullPlayer(
                         SharedArtwork(
                             song = cur,
                             size =
-                                minOf(maxWidth - OmegaSpacing.xl * 2, 340.dp)
+                                minOf(fullMaxWidth - OmegaSpacing.xl * 2, 340.dp)
                                     .value
                                     .toInt()
                                     .coerceAtLeast(0),
@@ -1062,8 +1067,8 @@ private fun ColumnScope.PlayerControls(
             onCheckedChange = { vm.player.toggleShuffle() },
             colors =
                 IconButtonDefaults.iconToggleButtonColors(
+                    contentColor = contentColor,
                     checkedContentColor = scheme.primary,
-                    uncheckedContentColor = contentColor,
                 ),
             modifier =
                 Modifier.semantics {
@@ -1109,8 +1114,8 @@ private fun ColumnScope.PlayerControls(
             onCheckedChange = { vm.player.cycleRepeat() },
             colors =
                 IconButtonDefaults.iconToggleButtonColors(
+                    contentColor = contentColor,
                     checkedContentColor = scheme.primary,
-                    uncheckedContentColor = contentColor,
                 ),
             modifier =
                 Modifier.semantics {
@@ -1183,10 +1188,10 @@ private fun ColumnScope.PlayerControls(
                 onCheckedChange = { onToggleLyrics() },
                 colors =
                     IconButtonDefaults.iconToggleButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = contentColor,
                         checkedContainerColor = Color.Transparent,
                         checkedContentColor = scheme.primary,
-                        uncheckedContainerColor = Color.Transparent,
-                        uncheckedContentColor = contentColor,
                     ),
                 modifier =
                     Modifier.semantics {
