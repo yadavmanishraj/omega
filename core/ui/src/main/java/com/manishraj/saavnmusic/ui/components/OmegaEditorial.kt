@@ -263,27 +263,40 @@ fun EditorialRowDivider(
  * a plain overlay with no input handling — touches pass through to the
  * rail beneath.
  *
- * Usage contract: place it in the `Box` wrapping the rail's `LazyRow`,
- * aligned to the center-end —
- * `OmegaRailEdgeFade(Modifier.align(Alignment.CenterEnd))` — and the
- * rail must sit directly on the page `background`: the fade's solid end
- * is the `background` role, never a container color, so a rail on any
- * other ground would fade to the wrong color.
+ * Usage contract: place it in the `Box` wrapping the rail's `LazyRow`
+ * and pass `Modifier.matchParentSize()` —
+ * `OmegaRailEdgeFade(Modifier.matchParentSize())` — composed AFTER the
+ * row so it draws above the cards. The sizing is load-bearing, not
+ * ceremony (uplift fix F4): the rail Box is measured inside a
+ * vertically scrolling column, so its height constraint is unbounded
+ * and a `fillMaxHeight()` overlay measured against it collapses to
+ * zero height — the W2-B construction did exactly that and the
+ * gradient composited nothing (Wave 4 Round 2: raw cover pixels at the
+ * extreme edge columns, Home + Detail, both themes).
+ * `matchParentSize()` instead sizes this overlay to the rail Box's
+ * measured size (set by the `LazyRow` sibling), and the inner strip
+ * then fills a bounded height. The rail must sit directly on the page
+ * `background`: the fade's solid end is the `background` role, never a
+ * container color, so a rail on any other ground would fade to the
+ * wrong color.
  */
 @Composable
 fun OmegaRailEdgeFade(modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .width(OmegaSpacing.xxl)
-            .fillMaxHeight()
-            .background(
-                Brush.horizontalGradient(
-                    colors =
-                        listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.background,
-                        ),
+    Box(modifier) {
+        Box(
+            Modifier
+                .align(Alignment.CenterEnd)
+                .width(OmegaSpacing.xxl)
+                .fillMaxHeight()
+                .background(
+                    Brush.horizontalGradient(
+                        colors =
+                            listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background,
+                            ),
+                    ),
                 ),
-            ),
-    )
+        )
+    }
 }

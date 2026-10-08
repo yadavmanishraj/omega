@@ -607,7 +607,7 @@ fun ArtistScreen(
                                     MediaCard(al.name, al.artist, al.imageUrl) { onAlbum(al.id) }
                                 }
                             }
-                            OmegaRailEdgeFade(Modifier.align(Alignment.CenterEnd))
+                            OmegaRailEdgeFade(Modifier.matchParentSize())
                         }
                     }
                 }
