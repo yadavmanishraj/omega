@@ -1,5 +1,6 @@
 package com.manishraj.saavnmusic.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -150,6 +151,104 @@ private fun SongRowFontScale133Preview() {
                     )
                 },
             )
+        }
+    }
+}
+
+/** Ranked chart rows (uplift W2-B, spec §5.2): zero-padded rank
+ * numerals in their 24dp column, hairline dividers between rows,
+ * the shared overflow menu riding the trailing slot unchanged. */
+@Preview(showBackground = true)
+@Composable
+private fun RankedSongRowPreview() {
+    SaavnTheme(dark = true) {
+        Surface {
+            Column {
+                RankedSongRow(
+                    song = previewSong,
+                    rank = 1,
+                    onClick = {},
+                    trailing = {
+                        SongOverflowMenuButton(
+                            song = previewSong,
+                            onAddToPlaylist = {},
+                        )
+                    },
+                )
+                EditorialRowDivider()
+                RankedSongRow(
+                    song =
+                        previewSong.copy(
+                            id = "preview-2",
+                            name = "Kesariya",
+                            artist = "Pritam, Arijit Singh",
+                            durationSec = 268,
+                        ),
+                    rank = 2,
+                    onClick = {},
+                )
+                EditorialRowDivider()
+                RankedSongRow(
+                    song =
+                        previewSong.copy(
+                            id = "preview-3",
+                            name = "Chaiyya Chaiyya",
+                            artist = "Sukhwinder Singh, Sapna Awasthi",
+                            durationSec = 355,
+                        ),
+                    rank = 3,
+                    onClick = {},
+                )
+            }
+        }
+    }
+}
+
+/** Section taxonomy label (uplift W2-B, spec §5.4): uppercase
+ * label + hairline rule, with and without the trailing action. */
+@Preview(showBackground = true)
+@Composable
+private fun OmegaSectionLabelPreview() {
+    SaavnTheme(dark = true) {
+        Surface {
+            Column(Modifier.padding(OmegaSpacing.lg)) {
+                OmegaSectionLabel(text = "Trending songs")
+                OmegaSectionLabel(
+                    text = "Jump back in",
+                    actionLabel = "See all",
+                    onAction = {},
+                    modifier = Modifier.padding(top = OmegaSpacing.lg),
+                )
+            }
+        }
+    }
+}
+
+/** Media cards at the W2-A geometry (spec §5.3): 124dp artwork
+ * @ xl (16), plus the circular artist variant on the same rail. */
+@Preview(showBackground = true)
+@Composable
+private fun MediaCardPreview() {
+    SaavnTheme(dark = true) {
+        Surface {
+            Row(
+                Modifier.padding(OmegaSpacing.lg),
+                horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
+            ) {
+                MediaCard(
+                    title = "Brahmastra (Original Motion Picture Soundtrack)",
+                    subtitle = "Pritam, Arijit Singh",
+                    imageUrl = null,
+                    onClick = {},
+                )
+                MediaCard(
+                    title = "Arijit Singh",
+                    subtitle = "Artist",
+                    imageUrl = null,
+                    circular = true,
+                    onClick = {},
+                )
+            }
         }
     }
 }

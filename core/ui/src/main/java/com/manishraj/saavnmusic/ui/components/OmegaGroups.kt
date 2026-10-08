@@ -47,6 +47,21 @@ private const val LARGE_FONT_WRAP_THRESHOLD = 1.6f
  * instead — every option stays visible, so the checked one can
  * never hide inside the overflow menu. Compact in-context groups
  * (player speed) keep the default overflow behavior.
+ *
+ * Selected treatments (uplift spec §5.7, verified against the pinned
+ * material3 1.5.0-alpha29 AAR + rendered Settings captures — re-check
+ * both on any alpha bump, this is the silent-drift class):
+ * - Connected group: `toggleableItem` exposes NO colors/shapes slot
+ *   in alpha29; its checked segment renders `primary` / `onPrimary`
+ *   (the expressive connected-group treatment) and the unchecked
+ *   segments `surfaceContainer` / `onSurfaceVariant`. There is no
+ *   supported override — a different fill means replacing the group,
+ *   which CP-8 forbids.
+ * - Chip fallback: FilterChip's selected fill IS the §5.7 treatment —
+ *   `secondaryContainer` / `onSecondaryContainer` — and its shapes
+ *   are the expressive chip tokens (base medium, pressed full,
+ *   checked small = OmegaShapes.small, 8). Do not pin a static
+ *   shape: the morph is the design.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable

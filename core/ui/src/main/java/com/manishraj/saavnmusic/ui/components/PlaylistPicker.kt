@@ -27,6 +27,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -38,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.manishraj.saavnmusic.domain.LocalPlaylist
@@ -181,6 +183,12 @@ fun PlaylistPickerDialog(
     BackHandler(enabled = creating && playlists.isNotEmpty()) { creating = false }
     AlertDialog(
         onDismissRequest = onDismiss,
+        // Dialog container set explicitly (uplift spec §5.8): the
+        // kit's grouped-surface role, not the dialog default — the
+        // default only happens to resolve to the same role today,
+        // and an inherited default is how the baseline-gray class of
+        // bug returns. Shape stays the expressive extraLarge default.
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             if (creating && playlists.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,6 +241,15 @@ fun PlaylistPickerDialog(
                     ) {
                         playlists.forEach { playlist ->
                             ListItem(
+                                // Transparent (uplift spec §5.8): the
+                                // stock ListItem container paints a
+                                // `surface` band behind the row — the
+                                // §5.1 defect class, dialog edition.
+                                // Rows sit on the dialog container.
+                                colors =
+                                    ListItemDefaults.colors(
+                                        containerColor = Color.Transparent,
+                                    ),
                                 supportingContent = {
                                     Text(
                                         songCountLabel(playlist.songCount),

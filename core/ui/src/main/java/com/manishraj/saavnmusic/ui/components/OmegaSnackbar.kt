@@ -136,7 +136,15 @@ fun OmegaSnackbarHost(
         val scheme = MaterialTheme.colorScheme
         Snackbar(
             snackbarData = data,
-            shape = MaterialTheme.shapes.large,
+            // Slot map (uplift spec §5.10): the COLOR assignments
+            // below are pixel-proven on device (polish wave, both
+            // themes — Undo #3BE477 dark / #15803D light); the
+            // container's VALUE moved only because §1 redefined the
+            // role it already pointed at. Shape is the §5.10 M3
+            // snackbar corner, extraSmall (4) — it was shapes.large
+            // (16) until this wave; no pixel gate ever sampled the
+            // radius, the color gates in §7 are the regression net.
+            shape = MaterialTheme.shapes.extraSmall,
             containerColor = scheme.surfaceContainerHigh,
             contentColor = scheme.onSurface,
             // material3 1.5.0-alpha29 colors the rendered action
