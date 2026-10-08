@@ -4,7 +4,9 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -491,8 +493,18 @@ fun ArtistScreen(
                             secondaryIcon = Icons.Filled.Shuffle,
                             modifier =
                                 Modifier
-                                    .padding(OmegaSpacing.lg)
-                                    .horizontalScroll(rememberScrollState()),
+                                    // §4.1 header→content, composed:
+                                    // SectionHeader's own bottom padding
+                                    // (sm) + this top inset (xs) = md
+                                    // (12). The bottom stays lg so the
+                                    // cluster→rows gap composes to the
+                                    // same 24 DetailList has.
+                                    .padding(
+                                        start = OmegaSpacing.lg,
+                                        end = OmegaSpacing.lg,
+                                        top = OmegaSpacing.xs,
+                                        bottom = OmegaSpacing.lg,
+                                    ).horizontalScroll(rememberScrollState()),
                         )
                     }
                     itemsIndexed(
@@ -519,6 +531,13 @@ fun ArtistScreen(
                     }
                 }
                 if (a.data.singles.isNotEmpty()) {
+                    if (a.data.topSongs.isNotEmpty()) {
+                        // §4.1 section gap, composed: the previous
+                        // rows' bottom padding (sm) + this spacer
+                        // (sm) + the header's top padding (sm)
+                        // = xl (24).
+                        item { Spacer(Modifier.height(OmegaSpacing.sm)) }
+                    }
                     item { SectionHeader("Singles") }
                     itemsIndexed(
                         a.data.singles,
@@ -544,9 +563,33 @@ fun ArtistScreen(
                     }
                 }
                 if (a.data.topAlbums.isNotEmpty()) {
+                    if (a.data.topSongs.isNotEmpty() || a.data.singles.isNotEmpty()) {
+                        // §4.1 section gap, composed as above
+                        // (sm + sm + sm) = xl (24). With no prior
+                        // section the hero's bottom padding + the
+                        // header's top padding already compose to
+                        // 24, so no spacer is added then.
+                        item { Spacer(Modifier.height(OmegaSpacing.sm)) }
+                    }
                     item { SectionHeader("Top albums") }
                     item {
-                        LazyRow {
+                        LazyRow(
+                            // Rails own their spacing (§4.2/§5.3):
+                            // cards start on the 16dp line with md
+                            // gaps — MediaCard carries no padding of
+                            // its own. The top inset completes the
+                            // §4.1 header→content md (the header's
+                            // sm + this xs); the bottom lg is the
+                            // page-end inset under the last section.
+                            contentPadding =
+                                PaddingValues(
+                                    start = OmegaSpacing.lg,
+                                    top = OmegaSpacing.xs,
+                                    end = OmegaSpacing.lg,
+                                    bottom = OmegaSpacing.lg,
+                                ),
+                            horizontalArrangement = Arrangement.spacedBy(OmegaSpacing.md),
+                        ) {
                             itemsIndexed(
                                 a.data.topAlbums,
                                 key = { index, al -> "album-$index-${al.id}" },
