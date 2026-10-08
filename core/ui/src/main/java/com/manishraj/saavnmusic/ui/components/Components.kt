@@ -374,6 +374,73 @@ fun ShimmerList() {
 }
 
 /**
+ * Ranked-chart skeleton: [ShimmerList]'s construction (one phase,
+ * `surfaceVariant` blocks, the same sweep) at the [RankedSongRow]
+ * geometry (spec §5.2/§4.4), for Home's Trending loading branch.
+ * The standard skeleton put its artwork at the screen inset and its
+ * text at the SongRow column; the resolved chart sits one rank
+ * column further right, so the section shifted horizontally on load
+ * (verify-loop LY-9). Here every block promises the ranked layout:
+ * 16dp inset, the 24dp rank column, 44dp artwork @ md, text at the
+ * 108dp column — the loaded rows land exactly where these blocks
+ * promise. Like [ShimmerList], no dividers are drawn: the hairlines
+ * are list-side in the resolved chart, and skeleton geometry is the
+ * content blocks.
+ */
+@Composable
+fun ShimmerRankedList() {
+    val phase = rememberShimmerPhase()
+    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+    Column {
+        repeat(6) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = OmegaSpacing.lg, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // The rank numeral's slot (§5.2): the full 24dp
+                // column, so the block's edges are the column's.
+                Box(
+                    Modifier
+                        .width(24.dp)
+                        .height(10.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .shimmerSweep(phase, highlight),
+                )
+                Spacer(Modifier.width(OmegaSpacing.md))
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(OmegaRadius.md))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .shimmerSweep(phase, highlight),
+                )
+                Spacer(Modifier.width(OmegaSpacing.md))
+                Column {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(14.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .shimmerSweep(phase, highlight),
+                    )
+                    Spacer(Modifier.height(OmegaSpacing.sm))
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.45f)
+                            .height(12.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .shimmerSweep(phase, highlight),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * Full-block error with a friendly cause+fix message and a recovery
  * action. Raw exception text never reaches this component (spec §3.4:
  * errors pair icon + text + recovery, and are never silent).

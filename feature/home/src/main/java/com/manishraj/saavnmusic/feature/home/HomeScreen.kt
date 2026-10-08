@@ -54,8 +54,8 @@ import com.manishraj.saavnmusic.ui.components.OmegaRailEdgeFade
 import com.manishraj.saavnmusic.ui.components.OmegaSectionLabel
 import com.manishraj.saavnmusic.ui.components.PlaylistPickerDialog
 import com.manishraj.saavnmusic.ui.components.RankedSongRow
-import com.manishraj.saavnmusic.ui.components.ShimmerList
 import com.manishraj.saavnmusic.ui.components.ShimmerRail
+import com.manishraj.saavnmusic.ui.components.ShimmerRankedList
 import com.manishraj.saavnmusic.ui.components.SongOverflowMenuButton
 import com.manishraj.saavnmusic.ui.components.SongRow
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
@@ -355,7 +355,7 @@ fun HomeScreen(
                     when (val s = trending) {
                         is UiState.Loading -> {
                             homeSection("Trending songs")
-                            item { ShimmerList() }
+                            item { ShimmerRankedList() }
                         }
                         is UiState.Error -> {
                             homeSection("Trending songs")
