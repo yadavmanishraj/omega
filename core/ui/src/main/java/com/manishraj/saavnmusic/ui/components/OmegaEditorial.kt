@@ -180,6 +180,8 @@ fun RankedSongRow(
                 Modifier
                     .width(RankColumnWidth)
                     .clearAndSetSemantics {},
+            maxLines = 1,
+            softWrap = false,
             color =
                 MaterialTheme.colorScheme.onSurfaceVariant.copy(
                     alpha = RANK_NUMERAL_ALPHA,
