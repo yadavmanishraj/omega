@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +25,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,6 +53,7 @@ import com.manishraj.saavnmusic.domain.formatDuration
 import com.manishraj.saavnmusic.ui.theme.LocalReducedMotion
 import com.manishraj.saavnmusic.ui.theme.OmegaRadius
 import com.manishraj.saavnmusic.ui.theme.OmegaSpacing
+import com.manishraj.saavnmusic.ui.theme.OmegaType
 import kotlinx.coroutines.delay
 
 /*
@@ -153,14 +154,43 @@ fun CircularArtwork(
     }
 }
 
+/**
+ * The one song row (uplift spec §5.1): a kit [Row] with explicit
+ * colors, NOT a stock ListItem — the stock item painted its default
+ * `surface` band behind every row (one of the audit's five competing
+ * background treatments) and styled the headline from the theme slot
+ * instead of the row tokens. The container is transparent: rows sit
+ * directly on the page background.
+ *
+ * Geometry (§4.4): artwork 48dp @ lg (12), padding 16 horizontal /
+ * 8 vertical on the §4.1 line, min height 64dp (the row grows past
+ * it at large font scales; it never shrinks below the touch target).
+ */
 @Composable
 fun SongRow(
     song: Song,
     onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    ListItem(
-        supportingContent = {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .heightIn(min = 64.dp)
+            .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Artwork(song.imageUrl, size = 48, contentDescription = song.name)
+        Spacer(Modifier.width(OmegaSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(
+                song.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = OmegaType.rowTitle,
+                color = scheme.onSurface,
+            )
             // The duration gets a protected slot: as one joined
             // string it was ellipsized away (or cut mid-value,
             // "• 3:…") whenever the artist list ran long at large
@@ -172,52 +202,52 @@ fun SongRow(
                     song.artist,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = OmegaType.rowMeta,
+                    color = scheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (duration.isNotBlank()) {
                     Text(
                         if (song.artist.isBlank()) duration else " • $duration",
                         maxLines = 1,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = OmegaType.rowMeta,
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
-        },
-        leadingContent = { Artwork(song.imageUrl, contentDescription = song.name) },
-        trailingContent = trailing,
-        modifier = Modifier.clickable { onClick() },
-    ) {
-        Text(
-            song.name,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleMedium,
-        )
+        }
+        if (trailing != null) {
+            trailing()
+        }
     }
 }
 
-/** Artwork-led card for rails and grids (148dp per spec §3.4). */
+/**
+ * Artwork-led card for rails and grids (uplift spec §5.3): artwork
+ * 124dp @ xl (16) — the Editorial artwork-forward size. The card
+ * carries NO outer padding: rails own spacing (§4.2 — contentPadding
+ * at the 16dp line, 12dp item gaps), so a card is exactly its
+ * artwork column and the first card lands on the section line.
+ */
 @Composable
 fun MediaCard(
     title: String,
     subtitle: String,
     imageUrl: String?,
-    width: Int = 148,
+    width: Int = 124,
     circular: Boolean = false,
     onClick: () -> Unit,
 ) {
     Column(
         Modifier
             .width(width.dp)
-            .clickable { onClick() }
-            .padding(OmegaSpacing.sm),
+            .clickable { onClick() },
     ) {
         if (circular) {
-            CircularArtwork(imageUrl, width - 16, contentDescription = title)
+            CircularArtwork(imageUrl, width, contentDescription = title)
         } else {
             // Card artwork corner = 16dp per the shape language (M3X spec §2.3: rows 12, cards 16, hero 28).
-            Artwork(imageUrl, width - 16, OmegaRadius.xl, contentDescription = title)
+            Artwork(imageUrl, width, OmegaRadius.xl, contentDescription = title)
         }
         Spacer(Modifier.height(OmegaSpacing.sm))
         Text(
@@ -302,15 +332,20 @@ fun ShimmerList() {
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     Column {
         repeat(6) {
+            // Skeleton geometry IS the SongRow geometry (§5.1/§4.4):
+            // 48dp artwork @ lg, 16dp inset, 8dp vertical padding,
+            // 64dp min height — the resolved rows land exactly where
+            // these blocks promise (LY-9: no layout shift on load).
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(OmegaSpacing.md),
+                    .heightIn(min = 64.dp)
+                    .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier
-                        .size(56.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(OmegaRadius.lg))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .shimmerSweep(phase, highlight),
@@ -357,12 +392,23 @@ fun ErrorState(
             .padding(OmegaSpacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.error,
-        )
+        // State skeleton (uplift §5.11, shared with EmptyState): the
+        // icon sits in a surfaceContainerLow circle — a tonal badge,
+        // not a bare glyph floating on the page.
+        Box(
+            Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
         Spacer(Modifier.height(OmegaSpacing.md))
         Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         Spacer(Modifier.height(OmegaSpacing.xs))
@@ -394,10 +440,16 @@ fun InlineErrorRow(
     icon: ImageVector = Icons.Outlined.ErrorOutline,
     actionLabel: String = "Retry",
 ) {
+    // The row is a BAND (uplift §5.11): a surfaceContainerLow rounded
+    // block on the §4.1 line — the outer padding positions the band,
+    // the band's own padding insets its content.
     Row(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = OmegaSpacing.lg, vertical = OmegaSpacing.sm),
+            .padding(horizontal = OmegaSpacing.lg)
+            .clip(RoundedCornerShape(OmegaRadius.lg))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .padding(horizontal = OmegaSpacing.md, vertical = OmegaSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -434,12 +486,22 @@ fun EmptyState(
             .padding(OmegaSpacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // State skeleton (uplift §5.11, shared with ErrorState): icon
+        // in a surfaceContainerLow circle, tinted onSurfaceVariant.
+        Box(
+            Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Spacer(Modifier.height(OmegaSpacing.md))
         Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         Spacer(Modifier.height(OmegaSpacing.xs))
@@ -451,7 +513,10 @@ fun EmptyState(
         )
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(OmegaSpacing.lg))
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            // The next step out of an empty state is THE action of
+            // the surface — a filled primary button, not a text
+            // whisper (§5.11).
+            Button(onClick = onAction) { Text(actionLabel) }
         }
     }
 }
@@ -481,8 +546,14 @@ fun OmegaDestructiveConfirmDialog(
     val scheme = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(text) },
+        // Container and shape are EXPLICIT (uplift §5.8): the grouped
+        // role and the expressive extraLarge corner are named here,
+        // never inherited from dialog defaults — a default that
+        // happens to match today is a leak that breaks tomorrow.
+        containerColor = scheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.extraLarge,
+        title = { Text(title, style = MaterialTheme.typography.headlineSmall) },
+        text = { Text(text, style = MaterialTheme.typography.bodyMedium) },
         confirmButton = {
             Button(
                 onClick = onConfirm,
