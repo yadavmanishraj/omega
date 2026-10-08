@@ -317,6 +317,11 @@ fun AppRoot() {
                     enter = miniEnter,
                     exit = miniExit,
                 ) {
+                    // Captured before the Column wraps the content:
+                    // inside the Column, `this` is its ColumnScope,
+                    // but MiniPlayer needs this AnimatedVisibility's
+                    // scope for the shared-element flight.
+                    val visibilityScope = this
                     Column {
                         // Chrome divider (design spec §4.3): the
                         // shell draws the hairline that separates
@@ -340,7 +345,7 @@ fun AppRoot() {
                         MiniPlayer(
                             onOpen = { showPlayer = true },
                             sharedTransitionScope = if (reducedMotion) null else sharedScope,
-                            animatedVisibilityScope = this,
+                            animatedVisibilityScope = visibilityScope,
                             artworkBoundsTransform = artworkBoundsTransform,
                         )
                     }
@@ -619,8 +624,9 @@ fun AppRoot() {
                                             colors =
                                                 ShortNavigationBarItemDefaults.colors(
                                                     selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    selectedTextColor = MaterialTheme.colorScheme.secondary,
-                                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    selectedTextColorTopIconPosition = MaterialTheme.colorScheme.secondary,
+                                                    selectedTextColorStartIconPosition = MaterialTheme.colorScheme.secondary,
+                                                    selectedIndicatorColor = MaterialTheme.colorScheme.secondaryContainer,
                                                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 ),
